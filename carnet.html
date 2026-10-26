@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Carnet de lecture</title>
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main id="app"></main>
+<dialog id="dlg"></dialog>
+<div id="net" role="alert" hidden>⚠ Des modifications ne sont pas encore enregistrées sur ton compte. Elles sont gardées sur cet appareil, nouvelle tentative en cours. Ne ferme pas la page tout de suite.</div>
+<div id="toast" role="status" hidden></div>
+<input type="file" id="imp" accept=".json,application/json" hidden>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.4/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script>
+const COL=['#e2557b','#2f6fed','#f2a33a','#1fa37a','#7b4ae2','#e0603a','#139fbf','#b23a8e'];
+const MOODS=['Laborieux','Mitigé','Bien','Captivant','Coup de cœur'];
+const SEC=[['sum','Résumé','Avec tes mots, comme si tu l\'expliquais à quelqu\'un qui n\'a pas lu le livre.',6],['chars','Personnages','Qui apparaît dans ce chapitre, ce qu\'ils font, ce qui les relie.',5],['quotes','Citations','Une par ligne, avec la page si tu veux.',5]];
+let D={books:[]},V={s:'shelf'},G='date',T,col=null,sync='',P=null,anim=true,ED=new Set(),DEL=new Set(),PEND=null,sb=null,UID=null,LK='carnet',hiddenAt=0;
+try{G=localStorage.getItem('carnet-g')||'date'}catch(e){}
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const uid=()=>Math.random().toString(36).slice(2,9);
+const book=()=>D.books.find(b=>b.id===V.b);
+const filled=c=>!!(c.mood||SEC.some(s=>c[s[0]]));
+const hearts=n=>n?'♥'.repeat(n)+'♡'.repeat(5-n):'';
+function local(){if(!UID)return;try{localStorage.setItem(LK,JSON.stringify(D));localStorage.setItem(LK+'-ed',JSON.stringify([...ED]));localStorage.setItem(LK+'-del',JSON.stringify([...DEL]))}catch(e){}}
+const meta=b=>{const{chapters,...m}=b;return m};
+const Q={},FAIL=new Set(),DQ=new Set();
+function net(){const n=$('#net');if(n)n.hidden=!FAIL.size}
+function toast(m){const t=$('#toast');t.textContent=m;t.hidden=false;t.style.opacity=1;clearTimeout(toast.t);toast.t=setTimeout(()=>{t.style.opacity=0;setTimeout(()=>t.hidden=true,300)},4500)}
+function wr(id,get){
+  if(!col)return;
+  if(Q[id]){Q[id].again=true;return}
+  Q[id]={again:false};
+  (async()=>{
+    let bad=false;
+    do{Q[id].again=false;bad=false;
+      try{await col.doc(id).set(get());FAIL.delete(id)}
+      catch(e){bad=true;FAIL.add(id)}
+      net();
+    }while(Q[id].again);
+    delete Q[id];
+    if(bad)setTimeout(()=>wr(id,get),5000);else{ED.delete(id);local()}
+  })();
+}
+function pb(b){ED.add('b-'+b.id);local();wr('b-'+b.id,()=>meta(b))}
+function pc(b,c){ED.add('c-'+c.id);local();wr('c-'+c.id,()=>({...c,b:b.id,ord:b.chapters.indexOf(c)}))}
+function pdel(id){
+  DEL.add(id);local();
+  if(!col||DQ.has(id))return;DQ.add(id);
+  col.doc(id).delete().then(()=>{DEL.delete(id);DQ.delete(id);FAIL.delete('d-'+id);net();local()})
+    .catch(()=>{DQ.delete(id);FAIL.add('d-'+id);net();setTimeout(()=>pdel(id),5000)});
+}
+function makeCol(){
+  return{
+    async all(){
+      let out=[],from=0;
+      for(;;){const{data,error}=await sb.from('docs').select('id,data').order('id').range(from,from+999);if(error)throw error;out=out.concat(data);if(data.length<1000)break;from+=1000}
+      return out;
+    },
+    doc:id=>({
+      set:async d=>{const{error}=await sb.from('docs').upsert({id,user_id:UID,data:d},{onConflict:'user_id,id'});if(error)throw error},
+      delete:async()=>{const{error}=await sb.from('docs').delete().eq('id',id);if(error)throw error}
+    })
+  };
+}
+async function pull(){
+  const rows=await col.all();
+  const bs=[],cs=[];rows.forEach(r=>{if(DEL.has(r.id))return;(r.id[0]==='b'?bs:cs).push(r.data)});
+  const old=D.books;
+  const nb=bs.map(b=>({...b,chapters:cs.filter(c=>c.b===b.id).sort((a,z)=>a.ord-z.ord)}));
+  old.forEach(lb=>{
+    let x=nb.find(y=>y.id===lb.id);
+    if(!x){if(ED.has('b-'+lb.id)||lb.chapters.some(c=>ED.has('c-'+c.id)))nb.push(x={...lb,chapters:[]});else return}
+    else if(ED.has('b-'+lb.id)){const ch=x.chapters;Object.assign(x,lb,{chapters:ch})}
+    lb.chapters.forEach(lc=>{if(!ED.has('c-'+lc.id))return;const i=x.chapters.findIndex(z=>z.id===lc.id);if(i<0)x.chapters.push(lc);else x.chapters[i]=lc});
+  });
+  D.books=nb;local();
+}
+function resend(){
+  [...ED].forEach(id=>{
+    const k=id.slice(2);
+    if(id[0]==='b'){const b=D.books.find(x=>x.id===k);if(b)wr(id,()=>meta(b));else ED.delete(id)}
+    else{let f=false;for(const b of D.books){const c=b.chapters.find(x=>x.id===k);if(c){wr(id,()=>({...c,b:b.id,ord:b.chapters.indexOf(c)}));f=true;break}}if(!f)ED.delete(id)}
+  });
+  [...DEL].forEach(id=>pdel(id));
+}
+const typing=()=>V.s==='chapter'&&(PEND||document.activeElement?.tagName==='TEXTAREA');
+async function sync_(){
+  try{await pull();sync='Synchronisé sur ton compte';resend()}
+  catch(e){sync='Hors connexion : données de cet appareil'}
+  if(UID&&!typing())render();
+}
+async function startApp(uid){
+  UID=uid;LK='carnet-'+uid;sync='Connexion…';
+  try{const r=localStorage.getItem(LK);D=r?JSON.parse(r):{books:[]};if(!Array.isArray(D.books))D={books:[]}}catch(e){D={books:[]}}
+  try{ED=new Set(JSON.parse(localStorage.getItem(LK+'-ed')||'[]'));DEL=new Set(JSON.parse(localStorage.getItem(LK+'-del')||'[]'))}catch(e){}
+  col=makeCol();V={s:'shelf'};anim=true;render();
+  await sync_();
+}
+function showLogin(){location.replace('index.html')}
+document.addEventListener('submit',async e=>{
+  if(e.target.id!=='lf')return;e.preventDefault();
+  const m=$('#lm');m.textContent='Connexion…';
+  const{data,error}=await sb.auth.signInWithPassword({email:$('#em').value.trim(),password:$('#pw').value});
+  if(error||!data.user){m.textContent='E-mail ou mot de passe incorrect.';return}
+  startApp(data.user.id);
+});
+async function init(){
+  const u=await Auth.guard();if(!u)return;
+  sb=Auth.sb;
+  sb.auth.onAuthStateChange(ev=>{if(ev==='SIGNED_OUT'&&UID)showLogin()});
+  startApp(u.id);
+}
+function doOut(){
+  try{localStorage.removeItem(LK);localStorage.removeItem(LK+'-ed');localStorage.removeItem(LK+'-del')}catch(e){}
+  const x=sb;D={books:[]};ED=new Set();DEL=new Set();UID=null;col=null;
+  x.auth.signOut().finally(()=>showLogin());
+}
+function importData(txt){
+  let j;try{j=JSON.parse(txt)}catch(e){return toast('Ce fichier n’est pas une sauvegarde valide.')}
+  const src=Array.isArray(j)?j:j.books;if(!Array.isArray(src))return toast('Ce fichier n’est pas une sauvegarde valide.');
+  let nbk=0,nch=0;
+  src.forEach(ib=>{
+    if(!ib||!ib.title)return;
+    let b=D.books.find(x=>x.id===ib.id);
+    if(!b){b={id:ib.id||uid(),title:ib.title,author:ib.author||'',genre:ib.genre||'',date:ib.date||'',cover:ib.cover||'',color:ib.color||COL[D.books.length%COL.length],rating:ib.rating||0,review:ib.review||'',chapters:[]};D.books.push(b);pb(b);nbk++}
+    (ib.chapters||[]).forEach(ic=>{
+      if(b.chapters.some(x=>x.id===ic.id))return;
+      const leg=[['ideas','Idées clés'],['q','Questions'],['notes','Notes'],['text','Notes']].filter(([k])=>ic[k]).map(([k,t])=>`${t} :\n${ic[k]}`).join('\n\n');
+      const c={id:ic.id||uid(),title:ic.title||'Chapitre',mood:ic.mood||0,sum:[ic.sum||'',leg].filter(Boolean).join('\n\n'),chars:ic.chars||'',quotes:ic.quotes||''};
+      b.chapters.push(c);pc(b,c);nch++;
+    });
+  });
+  local();anim=true;render();
+  toast(nbk||nch?`Importé : ${nbk} livre${nbk>1?'s':''}, ${nch} chapitre${nch>1?'s':''}.`:'Rien de nouveau à importer : tout était déjà présent.');
+}
+function cover(b){return `<div class="cv" style="background:${b.color}">${b.cover?`<img src="${b.cover}" alt="Couverture de ${esc(b.title)}">`:`<b>${esc(b.title)}</b><i>${esc(b.author)}</i>`}</div>`}
+function groups(){
+  const k={date:b=>b.date?b.date.slice(0,4):'Sans date',author:b=>b.author||'Auteur inconnu',genre:b=>b.genre||'Sans genre',alpha:b=>(b.title[0]||'#').toUpperCase()}[G];
+  const m={};D.books.forEach(b=>(m[k(b)]??=[]).push(b));
+  const ks=Object.keys(m).sort((a,b)=>a.localeCompare(b,'fr'));if(G==='date')ks.reverse();
+  ks.forEach(x=>m[x].sort((a,b)=>G==='date'?(b.date||'').localeCompare(a.date||''):a.title.localeCompare(b.title,'fr')));
+  return ks.map(x=>[x,m[x]]);
+}
+function stats(){
+  const bs=D.books;if(!bs.length)return '';
+  const ch=bs.reduce((a,b)=>a+b.chapters.filter(filled).length,0),tot=bs.reduce((a,b)=>a+b.chapters.length,0);
+  const rated=bs.filter(b=>b.rating),avg=rated.length?rated.reduce((a,b)=>a+b.rating,0)/rated.length:0;
+  const yr=String(new Date().getFullYear()),ty=bs.filter(b=>b.date&&b.date.slice(0,4)===yr).length;
+  const top=f=>{const m={};bs.forEach(b=>{const k=f(b);if(k)m[k]=(m[k]||0)+1});const e=Object.entries(m).sort((a,z)=>z[1]-a[1]||a[0].localeCompare(z[0],'fr'))[0];return e&&e[1]>=2?e:null};
+  const au=top(b=>b.author),ge=top(b=>b.genre),fav=bs.filter(b=>b.rating===5).length;
+  const years={};bs.forEach(b=>{if(b.date){const y=b.date.slice(0,4);years[y]=(years[y]||0)+1}});
+  const ys=Object.keys(years).sort().slice(-6),mx=Math.max(1,...ys.map(y=>years[y]));
+  const facts=[au&&`Auteur le plus lu : ${esc(au[0])} (${au[1]} livres)`,ge&&`Genre favori : ${esc(ge[0])} (${ge[1]} livres)`,fav&&`${fav} coup${fav>1?'s':''} de cœur`].filter(Boolean);
+  return `<div class="stats">
+    <div class="stat"><b class="num" data-n="${bs.length}">${bs.length}</b><small>livre${bs.length>1?'s':''} lu${bs.length>1?'s':''}</small></div>
+    <div class="stat"><b class="num" data-n="${ch}">${ch}</b><small>chapitre${ch>1?'s':''} annoté${ch>1?'s':''} sur ${tot}</small></div>
+    <div class="stat">${avg?`<b class="num" data-n="${avg}" data-d="1">${avg.toFixed(1).replace('.',',')}</b>`:`<b class="v">–</b>`}<small>note moyenne sur 5</small></div>
+    <div class="stat"><b class="num" data-n="${ty}">${ty}</b><small>livre${ty>1?'s':''} en ${yr}</small></div>
+    ${ys.length?`<div class="stat wide"><h3>Livres lus par année</h3>${ys.map(y=>`<div class="yr"><span>${y}</span><i style="width:${years[y]/mx*100}%"></i><b>${years[y]}</b></div>`).join('')}</div>`:''}
+    ${facts.length?`<div class="stat wide"><div class="facts">${facts.map(f=>`<span>${f}</span>`).join('')}</div></div>`:''}
+  </div>`;
+}
+function count(){
+  if(matchMedia('(prefers-reduced-motion:reduce)').matches)return;
+  document.querySelectorAll('.num').forEach(el=>{const n=+el.dataset.n,d=+el.dataset.d||0,t0=performance.now();
+    const step=t=>{const k=Math.min(1,(t-t0)/800),e=1-Math.pow(1-k,3);el.textContent=(n*e).toFixed(d).replace('.',',');if(k<1)requestAnimationFrame(step)};
+    requestAnimationFrame(step)});
+}
+function render(){
+  rend();
+  const a=$('#app');a.classList.toggle('anim',anim);
+  if(anim){
+    [...a.children].forEach((el,i)=>el.style.setProperty('--d',i*60+'ms'));
+    a.querySelectorAll('.bk,.tile,.stat').forEach((el,i)=>el.style.setProperty('--d',120+Math.min(i,14)*40+'ms'));
+    count();window.scrollTo(0,0);
+  }
+  anim=false;
+}
+function rend(){
+  const a=$('#app');
+  if(V.s==='shelf'){
+    document.documentElement.style.setProperty('--bc','#5b3fd1');
+    const seg=[['date','Ordre de lecture'],['author','Auteur'],['genre','Genre'],['alpha','A–Z']].map(([k,l])=>`<button data-a="grp" data-k="${k}" aria-pressed="${G===k}">${l}</button>`).join('');
+    a.innerHTML=`<h1>Ma bibliothèque</h1><p class="sub">${D.books.length} livre${D.books.length>1?'s':''} lu${D.books.length>1?'s':''} · <span class="ui">${esc(sync||'Connexion…')}</span> · <a class="lnk" href="index.html">← Accueil</a> · <button class="lnk" data-a="out">Se déconnecter</button></p>${stats()}
+    <div class="bar"><div class="seg">${seg}</div><div><button class="btn" data-a="exp">Sauvegarder</button> <button class="btn" data-a="imp">Importer</button> <button class="btn p" data-a="add">Ajouter un livre</button></div></div>`+
+    (D.books.length?groups().map(([g,l])=>`<h2>${esc(g)}</h2><div class="shelf">${l.map(b=>`<button class="bk" data-a="open" data-id="${b.id}" style="--bc:${b.color}">${cover(b)}<small>${esc(b.title)}<br>${esc(b.author)}${b.rating?`<br><span class="hearts">${hearts(b.rating)}</span>`:''}</small></button>`).join('')}</div>`).join(''):`<div class="empty">Ta bibliothèque est vide. Ajoute ton premier livre pour commencer ton carnet.</div>`);
+  }else if(V.s==='book'){
+    const b=book(),n=b.chapters.filter(filled).length;
+    document.documentElement.style.setProperty('--bc',b.color);
+    a.innerHTML=`<button class="back" data-a="home">‹ Bibliothèque</button>
+    <div class="hero">${cover(b)}<div style="flex:1;min-width:200px"><h1>${esc(b.title)}</h1><p class="sub">${esc(b.author)}${b.genre?' · '+esc(b.genre):''}${b.date?' · lu le '+new Date(b.date).toLocaleDateString('fr-FR'):''}</p>
+    <div class="prog"><span style="width:${b.chapters.length?n/b.chapters.length*100:0}%"></span></div><p class="sub ui" style="font-size:.85rem">${n} chapitre${n>1?'s':''} annoté${n>1?'s':''} sur ${b.chapters.length}</p>
+    <button class="btn" data-a="edit">Modifier</button> <button class="btn" data-a="del">Supprimer</button></div></div>
+    <h2>Chapitres et parties</h2>
+    ${b.chapters.length?`<div class="tiles">${b.chapters.map(c=>`<div class="tile ${filled(c)?'on':''}"><button class="go" data-a="chap" data-id="${c.id}">${esc(c.title)}<small>${c.mood?hearts(c.mood)+' · ':''}${c.sum?esc(c.sum.slice(0,60))+(c.sum.length>60?'…':''):filled(c)?'Notes écrites':'À annoter'}</small></button><button class="x" data-a="rmch" data-id="${c.id}" aria-label="Supprimer ${esc(c.title)}">✕</button></div>`).join('')}</div>`:`<div class="empty">Aucun chapitre pour l'instant.</div>`}
+    <div class="row"><input type="text" id="nch" placeholder="Nouveau chapitre ou partie" aria-label="Nouveau chapitre"><button class="btn p" data-a="addch">Ajouter</button></div>
+    <h2>Bilan du livre</h2>
+    <div class="mood" role="group" aria-label="Ma note">${[1,2,3,4,5].map(i=>`<button data-a="rate" data-v="${i}" aria-pressed="${b.rating===i}">${hearts(i)}</button>`).join('')}</div>
+    <label for="rv">Ce que ce livre m'a apporté, ce que j'en garde au final</label><textarea id="rv" data-bf="review" rows="6">${esc(b.review)}</textarea><p class="st" id="st"></p>`;
+  }else{
+    const b=book(),i=b.chapters.findIndex(x=>x.id===V.c),c=b.chapters[i];
+    document.documentElement.style.setProperty('--bc',b.color);
+    a.innerHTML=`<button class="back" data-a="openb">‹ ${esc(b.title)}</button><h1>${esc(c.title)}</h1><p class="sub">${esc(b.title)}, ${esc(b.author)}</p>
+    <label>Comment j'ai vécu ce chapitre</label><div class="mood">${MOODS.map((m,k)=>`<button data-a="mood" data-v="${k+1}" aria-pressed="${c.mood===k+1}">${m}</button>`).join('')}</div>
+    ${SEC.map(([f,t,h,r],k)=>`<details ${c[f]||k===0?'open':''}><summary>${t}</summary>${h?`<p class="hint">${h}</p>`:''}<textarea data-f="${f}" rows="${r}" aria-label="${t}">${esc(c[f])}</textarea></details>`).join('')}
+    <p class="st" id="st"></p>
+    <div class="nav"><button class="btn" data-a="chap" data-id="${b.chapters[i-1]?.id}" ${i?'':'hidden'}>‹ Précédent</button><button class="btn p" data-a="chap" data-id="${b.chapters[i+1]?.id}" ${b.chapters[i+1]?'':'hidden'}>Chapitre suivant ›</button></div>`;
+  }
+}
+document.addEventListener('input',e=>{
+  const t=e.target,f=t.dataset.f,bf=t.dataset.bf;if(!f&&!bf)return;
+  const b=book();let c;if(f){c=b.chapters.find(x=>x.id===V.c);c[f]=t.value}else b[bf]=t.value;
+  ED.add(f?'c-'+c.id:'b-'+b.id);
+  $('#st').textContent='Enregistrement…';clearTimeout(T);
+  PEND=()=>{PEND=null;f?pc(b,c):pb(b);const s=$('#st');if(s)s.textContent='Enregistré'};
+  T=setTimeout(()=>PEND&&PEND(),500);
+});
+function flush(){clearTimeout(T);if(PEND)PEND()}
+window.addEventListener('pagehide',flush);
+document.addEventListener('visibilitychange',()=>{if(document.hidden)flush()});
+function dom(src,cb){const i=new Image();i.onload=()=>{const s=Math.min(1,320/i.width),c=document.createElement('canvas');c.width=i.width*s;c.height=i.height*s;const x=c.getContext('2d');x.drawImage(i,0,0,c.width,c.height);const p=document.createElement('canvas');p.width=p.height=1;const q=p.getContext('2d');q.drawImage(i,0,0,1,1);const d=q.getImageData(0,0,1,1).data;cb(c.toDataURL('image/jpeg',.8),`rgb(${d[0]*.8|0},${d[1]*.8|0},${d[2]*.8|0})`)};i.src=src}
+function ask(msg,fn){P=fn;const d=$('#dlg');d.innerHTML=`<h1 style="font-size:1.4rem;margin:0">Confirmer</h1><p>${esc(msg)}</p><div class="fa"><button class="btn" data-a="close">Annuler</button><button class="btn d" data-a="yes">Supprimer</button></div>`;d.showModal()}
+function form(b){
+  const d=$('#dlg');d.dataset.cover=b?.cover||'';d.dataset.color=b?.color||'';
+  d.innerHTML=`<form method="dialog" id="f"><h1 style="font-size:1.6rem;margin:0">${b?'Modifier le livre':'Ajouter un livre'}</h1>
+  <label for="t">Titre</label><input type="text" id="t" required value="${esc(b?.title)}">
+  <label for="au">Auteur ou autrice</label><input type="text" id="au" value="${esc(b?.author)}">
+  <label for="ge">Genre</label><input type="text" id="ge" placeholder="Roman, essai, SF…" value="${esc(b?.genre)}">
+  <label for="da">Date de fin de lecture</label><input type="date" id="da" value="${esc(b?.date)}">
+  <label for="im">Couverture (photo ou image). La couleur du livre s'en inspire.</label><input type="file" id="im" accept="image/*">
+  ${b?'':`<label for="cl">Chapitres, un par ligne</label><textarea id="cl" rows="5" placeholder="Partie 1&#10;Chapitre 1&#10;Chapitre 2"></textarea>`}
+  <div class="fa"><button type="button" class="btn" data-a="close">Annuler</button><button class="btn p" type="submit">Enregistrer</button></div></form>`;
+  d.showModal();
+  $('#im').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>dom(r.result,(u,c)=>{d.dataset.cover=u;d.dataset.color=c});r.readAsDataURL(f)};
+  $('#f').onsubmit=()=>{
+    const v={title:$('#t').value.trim(),author:$('#au').value.trim(),genre:$('#ge').value.trim(),date:$('#da').value,cover:d.dataset.cover,color:d.dataset.color||COL[D.books.length%COL.length]};
+    let nb=b;
+    if(b)Object.assign(b,v);else{nb={id:uid(),rating:0,review:'',chapters:[],...v};nb.chapters=($('#cl').value.split('\n').map(x=>x.trim()).filter(Boolean)).map(t=>({id:uid(),title:t,mood:0,sum:'',chars:'',quotes:''}));D.books.push(nb)}
+    pb(nb);if(!b)nb.chapters.forEach(c=>pc(nb,c));render();
+  };
+}
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-a]');if(!t)return;const a=t.dataset.a,id=t.dataset.id;flush();
+  if(a==='grp'){anim=true;G=t.dataset.k;try{localStorage.setItem('carnet-g',G)}catch(x){}}
+  else if(a==='add')return form();
+  else if(a==='edit')return form(book());
+  else if(a==='close')return $('#dlg').close();
+  else if(a==='open'){V={s:'book',b:id};anim=true}
+  else if(a==='home'){V={s:'shelf'};anim=true}
+  else if(a==='openb'){V={s:'book',b:V.b};anim=true}
+  else if(a==='chap'){V={s:'chapter',b:V.b,c:id};anim=true}
+  else if(a==='mood'){const b=book(),c=b.chapters.find(x=>x.id===V.c);c.mood=c.mood===+t.dataset.v?0:+t.dataset.v;pc(b,c);document.querySelectorAll('[data-a=mood]').forEach(x=>x.setAttribute('aria-pressed',c.mood===+x.dataset.v));return}
+  else if(a==='rate'){const b=book();b.rating=b.rating===+t.dataset.v?0:+t.dataset.v;pb(b);document.querySelectorAll('[data-a=rate]').forEach(x=>x.setAttribute('aria-pressed',b.rating===+x.dataset.v));return}
+  else if(a==='addch'){const v=$('#nch').value.trim();if(!v)return;const b=book(),c={id:uid(),title:v,mood:0,sum:'',chars:'',quotes:''};b.chapters.push(c);pc(b,c)}
+  else if(a==='rmch'){const b=book(),c=b.chapters.find(x=>x.id===id);return ask(`Supprimer « ${c.title} » et ses notes ?`,()=>{b.chapters=b.chapters.filter(x=>x!==c);pdel('c-'+id);b.chapters.forEach(x=>pc(b,x));render()})}
+  else if(a==='del'){const b=book();return ask(`Supprimer « ${b.title} » et toutes ses notes ?`,()=>{D.books=D.books.filter(x=>x!==b);pdel('b-'+b.id);b.chapters.forEach(c=>pdel('c-'+c.id));V={s:'shelf'};anim=true;local();render()})}
+  else if(a==='yes'){$('#dlg').close();const f=P;P=null;return f&&f()}
+  else if(a==='imp')return $('#imp').click();
+  else if(a==='out'){return (ED.size||DEL.size||FAIL.size)?ask('Des modifications ne sont pas encore envoyées sur ton compte. Si tu te déconnectes maintenant, elles seront perdues. Continuer ?',doOut):doOut()}
+  else if(a==='exp'){const l=document.createElement('a');l.href=URL.createObjectURL(new Blob([JSON.stringify(D)],{type:'application/json'}));l.download='carnet-de-lecture.json';l.click();return}
+  render();if(a==='addch'){const n=$('#nch');if(n)n.focus()}
+});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&!e.isComposing&&e.target.id==='nch'){e.preventDefault();const b=document.querySelector('[data-a="addch"]');if(b)b.click()}
+});
+$('#imp').addEventListener('change',e=>{const f=e.target.files[0];e.target.value='';if(!f)return;const r=new FileReader();r.onload=()=>importData(String(r.result));r.readAsText(f)});
+window.addEventListener('beforeunload',e=>{if(PEND||Object.keys(Q).length||FAIL.size){e.preventDefault();e.returnValue=''}});
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden){hiddenAt=Date.now();return}
+  if(UID&&col&&hiddenAt&&Date.now()-hiddenAt>30000&&!PEND&&!Object.keys(Q).length)sync_();
+});
+init();
+</script>
+</body>
+</html>

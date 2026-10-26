@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mon espace</title>
+<meta name="robots" content="noindex,nofollow">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main id="app"></main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.4/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script>
+/* ===== Ajouter un outil = ajouter une ligne ici + créer sa page ===== */
+const APPS=[
+  {href:'carnet.html',icon:'📚',title:'Carnet de lecture',desc:'Livres, chapitres, citations',c:'#5b3fd1'},
+  {href:'calculatrice.html',icon:'🧮',title:'Calculatrice',desc:'Opérations rapides',c:'#1fa37a'}
+];
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const $=s=>document.querySelector(s),a=$('#app');
+function menu(){
+  a.innerHTML=`<h1>Mon espace</h1><p class="sub">Choisis un outil · <button class="lnk" id="out">Se déconnecter</button></p>
+  <div class="apps">${APPS.map((p,i)=>`<a class="app" href="${esc(p.href)}" style="--c:${p.c};--d:${i*70}ms"><span class="ic">${p.icon}</span><b>${esc(p.title)}</b><small>${esc(p.desc)}</small></a>`).join('')}</div>`;
+  $('#out').onclick=()=>Auth.sb.auth.signOut().finally(login);
+}
+function login(msg){
+  a.innerHTML=`<div class="login"><h1>Mon espace</h1><p class="sub">Connecte-toi pour accéder à tes outils.</p>
+  <form id="lf"><label for="em">E-mail</label><input type="email" id="em" autocomplete="username" autocapitalize="none" required>
+  <label for="pw">Mot de passe</label><input type="password" id="pw" autocomplete="current-password" required>
+  <button class="btn p" type="submit">Se connecter</button><p class="st" id="lm" role="alert">${esc(msg||'')}</p></form></div>`;
+  $('#lf').onsubmit=async e=>{
+    e.preventDefault();$('#lm').textContent='Connexion…';
+    const{data,error}=await Auth.sb.auth.signInWithPassword({email:$('#em').value.trim(),password:$('#pw').value});
+    if(error||!data.user)$('#lm').textContent='E-mail ou mot de passe incorrect.';else menu();
+  };
+}
+(async()=>{if(!Auth.init())return;(await Auth.user())?menu():login()})();
+</script>
+</body>
+</html>
