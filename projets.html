@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Suivi des projets</title>
+<meta name="robots" content="noindex,nofollow">
+<link rel="stylesheet" href="style.css">
+<style>
+.fl{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0}.fl>*{width:auto;flex:1 1 150px}
+select{font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;width:100%}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:16px;background:var(--card)}
+table{border-collapse:collapse;width:100%;font:.9rem 'Instrument Sans',sans-serif}
+th{text-align:left;color:var(--mute);font-weight:600;padding:11px 14px;white-space:nowrap}
+td{padding:11px 14px;border-top:1px solid var(--line)}
+tr[data-id]{cursor:pointer}tr[data-id]:hover td{background:color-mix(in srgb,var(--acc) 7%,var(--card))}
+.bd{display:inline-block;border-radius:99px;padding:3px 11px;color:#fff;font-size:.8rem;white-space:nowrap}
+.pn{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;margin-top:12px}
+.br{display:grid;grid-template-columns:8rem 1fr auto;gap:10px;align-items:center;font:.85rem 'Instrument Sans',sans-serif;margin:7px 0}
+.br span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.br i{display:block;height:10px;border-radius:10px;background:var(--c,var(--acc))}
+dialog{width:min(720px,94vw);max-height:90vh;overflow:auto}
+dialog label{display:block;font:600 .85rem 'Instrument Sans',sans-serif;color:var(--mute);margin:0 0 4px}
+.g{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+.er{display:grid;grid-template-columns:150px 1fr auto;gap:8px;margin-bottom:8px;align-items:center}
+</style>
+</head>
+<body>
+<main>
+  <div class="top"><a href="index.html">← Accueil</a><button class="lnk" id="out">Se déconnecter</button></div>
+  <h1>Suivi des projets</h1>
+  <p class="sub" id="st">Chargement…</p>
+  <div class="bar"><div class="seg" id="tabs"></div><div><button class="btn" id="csv">Exporter CSV</button> <button class="btn p" id="add">Nouveau projet</button></div></div>
+  <div id="v"></div>
+</main>
+<dialog id="dlg"></dialog>
+<div id="toast" role="status" hidden></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.4/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script>
+(async()=>{
+const u=await Auth.guard();if(!u)return;
+const sb=Auth.sb,UID=u.id,$=s=>document.querySelector(s);
+const STAT=['Brouillon','En préparation','Déposé','Accepté','Refusé','Liste complémentaire','Annulé'];
+const COL={Brouillon:'#8a84a3','En préparation':'#d98a1c','Déposé':'#3b7fd4','Accepté':'#1fa37a','Refusé':'#c0392b','Liste complémentaire':'#8e5bd1','Annulé':'#6d6d6d'};
+const SOUMIS=['Déposé','Accepté','Refusé','Liste complémentaire'],DECIDES=['Accepté','Refusé','Liste complémentaire'];
+const DEF={prog:['Horizon Europe','ANR','Interreg','Erasmus+','Autre'],disp:['ERC','MSCA','Cluster 1','Cluster 2','Cluster 3','Cluster 4','Cluster 5','Cluster 6','EIC','Widening'],role:['Coordinateur','Partenaire','Tiers lié']};
+const F=[['acr','Acronyme','text'],['annee','Année de dépôt','number'],['prog','Programme','text','prog'],['disp','Dispositif','text','disp'],['call','Call (appel à projets)','text'],['role','Rôle de l’établissement','text','role'],['labo','Laboratoire','text','labo'],['porteur','Porteur interne','text','por'],['contact','Contact du porteur','text'],['statut','Statut','select'],['budget','Budget (€)','number'],['debut','Date de début','date'],['fin','Date de fin','date'],['mois','Nombre de mois','number']];
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const eur=n=>new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(n||0);
+const dfr=d=>d?new Date(d+'T00:00').toLocaleDateString('fr-FR'):'';
+const today=new Date().toISOString().slice(0,10);
+let P=[],tab='list',flt={q:'',y:'',s:''},pend=0,chain=Promise.resolve();
+const toast=m=>{const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>t.hidden=true,3500)};
+const setSt=(m,bad)=>{$('#st').textContent=m;$('#st').style.color=bad?'#b3261e':''};
+const run=fn=>{pend++;chain=chain.then(fn).then(r=>{if(r&&r.error)throw r.error;if(!--pend)setSt('Enregistré sur ton compte')}).catch(e=>{pend=Math.max(0,pend-1);setSt('⚠ Non enregistré : '+(e.message||e)+'. Réessaie ou exporte en CSV.',true)})};
+const saveP=id=>run(()=>{const p=P.find(x=>x.id===id);if(!p)return;const{id:_,...data}=p;return sb.from('projets').upsert({id,user_id:UID,data},{onConflict:'user_id,id'})});
+const delP=id=>run(()=>sb.from('projets').delete().eq('id',id));
+window.addEventListener('beforeunload',e=>{if(pend){e.preventDefault();e.returnValue=''}});
+
+const nextEch=p=>(p.ech||[]).filter(e=>e.date>=today).sort((a,b)=>a.date.localeCompare(b.date))[0];
+const filtered=()=>P.filter(p=>(!flt.y||String(p.annee)===flt.y)&&(!flt.s||p.statut===flt.s)&&(!flt.q||Object.values(p).join(' ').toLowerCase().includes(flt.q.toLowerCase())))
+  .sort((a,b)=>(b.annee||0)-(a.annee||0)||(a.acr||'').localeCompare(b.acr||''));
+
+function list(){
+  const ys=[...new Set(P.map(p=>p.annee).filter(Boolean))].sort((a,b)=>b-a),L=filtered();
+  const rows=L.map(p=>{const e=nextEch(p);return `<tr data-id="${esc(p.id)}"><td><b>${esc(p.acr)}</b></td><td>${esc(p.annee)}</td><td>${esc(p.prog)}<br><small>${esc(p.disp)}</small></td><td>${esc(p.labo)}</td><td>${esc(p.porteur)}</td><td><span class="bd" style="background:${COL[p.statut]}">${esc(p.statut)}</span></td><td>${p.budget?eur(p.budget):''}</td><td>${e?dfr(e.date)+' · '+esc(e.label):''}</td></tr>`}).join('');
+  $('#v').innerHTML=`<div class="fl"><input id="q" type="search" placeholder="Rechercher…" value="${esc(flt.q)}"><select id="fy"><option value="">Toutes les années</option>${ys.map(y=>`<option${String(y)===flt.y?' selected':''}>${y}</option>`).join('')}</select><select id="fs"><option value="">Tous les statuts</option>${STAT.map(s=>`<option${s===flt.s?' selected':''}>${s}</option>`).join('')}</select></div>
+  ${L.length?`<div class="tw"><table><thead><tr><th>Acronyme</th><th>Année</th><th>Programme / dispositif</th><th>Laboratoire</th><th>Porteur</th><th>Statut</th><th>Budget</th><th>Prochaine échéance</th></tr></thead><tbody>${rows}</tbody></table></div>`:`<p class="sub">${P.length?'Aucun projet ne correspond.':'Aucun projet pour l’instant : clique sur « Nouveau projet ».'}</p>`}`;
+  $('#q').oninput=e=>{flt.q=e.target.value;const pos=e.target.selectionStart;list();const q=$('#q');q.focus();q.setSelectionRange(pos,pos)};
+  $('#fy').onchange=e=>{flt.y=e.target.value;list()};$('#fs').onchange=e=>{flt.s=e.target.value;list()};
+  $('#v').querySelectorAll('tr[data-id]').forEach(r=>r.onclick=()=>form(r.dataset.id));
+}
+const grp=(L,k)=>{const m={};L.forEach(p=>{const n=String(p[k]||'Non renseigné');const o=m[n]||(m[n]={n:0,a:0});o.n++;if(p.statut==='Accepté')o.a++});return Object.entries(m)};
+const byN=r=>r.sort((x,y)=>y[1].n-x[1].n||x[0].localeCompare(y[0]));
+const panel=(t,rows,c)=>{const mx=Math.max(1,...rows.map(r=>r[1].n));return `<div class="stat"><h3>${t}</h3>${rows.length?rows.map(([k,o])=>`<div class="br"><span title="${esc(k)}">${esc(k)}</span><i style="width:${o.n/mx*100}%;--c:${c||'var(--acc)'}"></i><span>${o.n}${o.a?` · ${o.a} ✓`:''}</span></div>`).join(''):'<p class="hint">Pas encore de données.</p>'}</div>`};
+function stats(){
+  const S=P.filter(p=>SOUMIS.includes(p.statut)),A=P.filter(p=>p.statut==='Accepté'),D=P.filter(p=>DECIDES.includes(p.statut));
+  const sum=L=>L.reduce((t,p)=>t+(+p.budget||0),0),taux=D.length?Math.round(A.length/D.length*100)+' %':'–';
+  const k=(v,l)=>`<div class="stat"><span class="v">${v}</span><small>${l}</small></div>`;
+  const ech=P.filter(p=>!['Refusé','Annulé'].includes(p.statut)).flatMap(p=>(p.ech||[]).filter(e=>e.date>=today).map(e=>({...e,acr:p.acr}))).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,8);
+  $('#v').innerHTML=`<div class="stats">${k(P.length,'projets suivis')}${k(S.length,'déposés')}${k(A.length,'acceptés')}${k(taux,'taux de succès*')}${k(eur(sum(S)),'budget déposé')}${k(eur(sum(A)),'budget accepté')}${k(P.filter(p=>['Brouillon','En préparation'].includes(p.statut)).length,'en préparation')}</div>
+  <div class="pn">${panel('Déposés par année',grp(S,'annee').sort((a,b)=>a[0].localeCompare(b[0])))}
+  ${panel('Par statut',STAT.map(s=>[s,{n:P.filter(p=>p.statut===s).length,a:0}]).filter(r=>r[1].n),'#8e5bd1')}
+  ${panel('Laboratoires qui déposent le plus',byN(grp(S,'labo')).slice(0,10),'#3b7fd4')}
+  ${panel('Programmes',byN(grp(S,'prog')),'#1fa37a')}${panel('Dispositifs',byN(grp(S,'disp')),'#d98a1c')}
+  ${panel('Rôle de l’établissement',byN(grp(S,'role')),'#c0392b')}${panel('Porteurs internes',byN(grp(S,'porteur')).slice(0,8),'#5b3fd1')}
+  <div class="stat"><h3>Échéances à venir</h3>${ech.length?ech.map(e=>`<div class="br" style="grid-template-columns:5.5rem 1fr"><span>${dfr(e.date)}</span><span><b>${esc(e.acr)}</b> · ${esc(e.label)}</span></div>`).join(''):'<p class="hint">Aucune échéance à venir.</p>'}</div></div>
+  <p class="hint" style="margin-top:14px">Déposé = statuts Déposé, Accepté, Refusé ou Liste complémentaire. ✓ = acceptés. *Taux de succès = acceptés ÷ projets ayant reçu une décision (acceptés, refusés, liste complémentaire).</p>`;
+}
+const render=()=>{$('#tabs').innerHTML=[['list','Projets'],['stats','Statistiques']].map(([k,l])=>`<button data-t="${k}" aria-pressed="${tab===k}">${l}</button>`).join('');tab==='list'?list():stats()};
+$('#tabs').onclick=e=>{const b=e.target.closest('button');if(b){tab=b.dataset.t;render()}};
+
+function form(id){
+  const p=id?P.find(x=>x.id===id):{statut:'Brouillon',annee:new Date().getFullYear()};let ech=(p.ech||[]).map(e=>({...e}));
+  const dl=(n,k)=>`<datalist id="dl-${n}">${[...new Set([...(DEF[n]||[]),...P.map(x=>x[k]).filter(Boolean)])].map(v=>`<option value="${esc(v)}">`).join('')}</datalist>`;
+  const inp=([k,l,t,d])=>`<div><label>${l}</label>${t==='select'?`<select name="${k}">${STAT.map(s=>`<option${p.statut===s?' selected':''}>${s}</option>`).join('')}</select>`:`<input name="${k}" type="${t}"${d?` list="dl-${d}"`:''} value="${esc(p[k])}"${k==='acr'?' required':''}${t==='number'?' min="0" step="any"':''}${k==='mois'?' placeholder="auto"':''}>`}</div>`;
+  const dlg=$('#dlg');
+  dlg.innerHTML=`<form id="pf"><h2>${id?'Modifier le projet':'Nouveau projet'}</h2><div class="g">${F.map(inp).join('')}</div><label style="margin-top:16px">Échéances</label><div id="ech"></div><button type="button" class="btn" id="ae">+ Ajouter une échéance</button><label style="margin-top:16px">Notes</label><textarea name="notes" rows="3">${esc(p.notes)}</textarea>${dl('prog','prog')+dl('disp','disp')+dl('role','role')+dl('labo','labo')+dl('por','porteur')}<div class="fa">${id?'<button type="button" class="btn" id="del">Supprimer</button>':''}<button type="button" class="btn" id="cx">Annuler</button><button class="btn p">Enregistrer</button></div></form>`;
+  const re=()=>{$('#ech').innerHTML=ech.map((e,i)=>`<div class="er"><input type="date" data-i="${i}" data-f="date" value="${esc(e.date)}"><input type="text" data-i="${i}" data-f="label" placeholder="Intitulé" value="${esc(e.label)}"><button type="button" class="lnk" data-x="${i}">Retirer</button></div>`).join('')};re();
+  $('#ech').oninput=e=>{const t=e.target;if(t.dataset.i)ech[t.dataset.i][t.dataset.f]=t.value};
+  $('#ech').onclick=e=>{const x=e.target.dataset.x;if(x!==undefined){ech.splice(+x,1);re()}};
+  $('#ae').onclick=()=>{ech.push({date:'',label:''});re()};$('#cx').onclick=()=>dlg.close();
+  if(id)$('#del').onclick=()=>{if(confirm('Supprimer « '+p.acr+' » ? Une copie reste dans l’historique de la base.')){P=P.filter(x=>x.id!==id);delP(id);dlg.close();render()}};
+  $('#pf').onsubmit=e=>{e.preventDefault();const f=Object.fromEntries(new FormData(e.target));
+    ['annee','budget','mois'].forEach(k=>f[k]=f[k]===''?'':+f[k]);
+    if(f.mois===''&&f.debut&&f.fin)f.mois=Math.max(0,Math.round((new Date(f.fin)-new Date(f.debut))/2629800000));
+    const o={...p,...f,id:id||'p-'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),ech:ech.filter(x=>x.date||x.label)};
+    P=id?P.map(x=>x.id===id?o:x):[...P,o];saveP(o.id);dlg.close();render();toast('Projet enregistré')};
+  dlg.showModal();
+}
+$('#add').onclick=()=>form();$('#out').onclick=()=>Auth.out();
+$('#csv').onclick=()=>{const c=v=>'"'+String(v??'').replace(/"/g,'""')+'"',H=F.map(f=>f[1]).concat(['Échéances','Notes']);
+  const t=[H.map(c).join(';')].concat(filtered().map(p=>F.map(f=>c(p[f[0]])).concat([c((p.ech||[]).map(e=>e.date+' '+e.label).join(' | ')),c(p.notes)]).join(';'))).join('\r\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+t],{type:'text/csv'}));a.download='projets.csv';a.click()};
+
+const{data,error}=await sb.from('projets').select('id,data').order('id');
+if(error){setSt(/relation|does not exist|schema cache/i.test(error.message)?'⚠ La table « projets » n’existe pas encore : lance supabase_projets.sql dans Supabase (voir la marche à suivre).':'⚠ Chargement impossible : '+error.message,true);return}
+P=data.map(r=>({...r.data,id:r.id}));setSt(P.length+' projet'+(P.length>1?'s':'')+' · enregistré sur ton compte');render();
+})();
+</script>
+</body>
+</html>
