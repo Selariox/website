@@ -7,22 +7,30 @@
 <meta name="robots" content="noindex,nofollow">
 <link rel="stylesheet" href="style.css">
 <style>
-.fl{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0}.fl>*{width:auto;flex:1 1 150px}
+.fl{display:flex;gap:10px;margin:14px 0 0}.fl>*{flex:1}
 select{font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;width:100%}
-.tw{overflow-x:auto;border:1px solid var(--line);border-radius:16px;background:var(--card)}
-table{border-collapse:collapse;width:100%;font:.9rem 'Instrument Sans',sans-serif}
-th{text-align:left;color:var(--mute);font-weight:600;padding:11px 14px;white-space:nowrap}
-td{padding:11px 14px;border-top:1px solid var(--line)}
-tr[data-id]{cursor:pointer}tr[data-id]:hover td{background:color-mix(in srgb,var(--acc) 7%,var(--card))}
-.bd{display:inline-block;border-radius:99px;padding:3px 11px;color:#fff;font-size:.8rem;white-space:nowrap}
+.bd{display:inline-block;align-self:flex-start;border-radius:99px;padding:3px 11px;color:#fff;font:.78rem 'Instrument Sans',sans-serif;white-space:nowrap}
 .pn{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;margin-top:12px}
 .br{display:grid;grid-template-columns:8rem 1fr auto;gap:10px;align-items:center;font:.85rem 'Instrument Sans',sans-serif;margin:7px 0}
 .br span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .br i{display:block;height:10px;border-radius:10px;background:var(--c,var(--acc))}
-dialog{width:min(720px,94vw);max-height:90vh;overflow:auto}
-dialog label{display:block;font:600 .85rem 'Instrument Sans',sans-serif;color:var(--mute);margin:0 0 4px}
-.g{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
-.er{display:grid;grid-template-columns:150px 1fr auto;gap:8px;margin-bottom:8px;align-items:center}
+.pipe{display:flex;gap:4px;margin:18px 0 6px;height:58px}
+.pp{flex:1 1 0;min-width:44px;border:0;border-bottom:4px solid var(--c);border-radius:10px;background:color-mix(in srgb,var(--c) 16%,var(--card));color:var(--ink);cursor:pointer;display:flex;flex-direction:column;justify-content:center;align-items:center;font:.7rem 'Instrument Sans',sans-serif;transition:transform .15s,background .2s}
+.pp:hover{transform:translateY(-2px)}.pp b{font:700 1.2rem 'Fraunces',serif}.pp span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.pp[aria-pressed=true]{background:var(--c);color:#fff}
+.gh{display:flex;align-items:baseline;gap:10px;margin:28px 0 10px;font:700 1.3rem 'Fraunces',serif}.gh small{color:var(--mute);font:.85rem 'Instrument Sans',sans-serif}
+.pcs{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+.pc{text-align:left;font:inherit;color:inherit;cursor:pointer;background:var(--card);border:1px solid var(--line);border-top:6px solid var(--bc);border-radius:16px;padding:16px 18px;display:flex;flex-direction:column;gap:6px;transition:transform .2s,box-shadow .2s}
+.pc:hover{transform:translateY(-4px);box-shadow:0 14px 24px -16px rgba(60,40,140,.55)}
+.pc h3{margin:6px 0 0;font:700 1.35rem 'Fraunces',serif}.pc p{margin:0;font:.88rem 'Instrument Sans',sans-serif}.pc .m{color:var(--mute)}
+.ft{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;font:.85rem 'Instrument Sans',sans-serif;color:var(--mute)}
+.ch{display:inline-block;background:color-mix(in srgb,var(--acc) 12%,var(--card));border-radius:99px;padding:3px 10px;font:.82rem 'Instrument Sans',sans-serif;color:var(--ink)}.ch.soon{background:#d98a1c;color:#fff}.ch.late{background:#b3261e;color:#fff}
+.an .pc{animation:up .45s cubic-bezier(.2,.7,.2,1) var(--d,0ms) backwards}
+.ttl{font:700 2.1rem/1.15 'Fraunces',serif;border:0;border-bottom:2px solid var(--line);border-radius:0;background:transparent;padding:4px 0;margin-top:10px}
+.g{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;padding-bottom:18px}
+details label{display:block;font:600 .85rem 'Instrument Sans',sans-serif;color:var(--mute);margin:0 0 4px}
+.er{display:grid;grid-template-columns:24px 150px 1fr auto;gap:8px;margin-bottom:8px;align-items:center}.er input[type=checkbox]{width:18px;height:18px}
+details>.btn{margin-bottom:18px}
 </style>
 </head>
 <body>
@@ -30,10 +38,8 @@ dialog label{display:block;font:600 .85rem 'Instrument Sans',sans-serif;color:va
   <div class="top"><a href="index.html">← Accueil</a><button class="lnk" id="out">Se déconnecter</button></div>
   <h1>Suivi des projets</h1>
   <p class="sub" id="st">Chargement…</p>
-  <div class="bar"><div class="seg" id="tabs"></div><div><button class="btn" id="csv">Exporter CSV</button> <button class="btn p" id="add">Nouveau projet</button></div></div>
   <div id="v"></div>
 </main>
-<dialog id="dlg"></dialog>
 <div id="toast" role="status" hidden></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.4/dist/umd/supabase.js"></script>
 <script src="config.js"></script>
@@ -51,7 +57,7 @@ const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&g
 const eur=n=>new Intl.NumberFormat('fr-FR',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(n||0);
 const dfr=d=>d?new Date(d+'T00:00').toLocaleDateString('fr-FR'):'';
 const today=new Date().toISOString().slice(0,10);
-let P=[],tab='list',flt={q:'',y:'',s:''},pend=0,chain=Promise.resolve();
+let P=[],tab='list',flt={q:'',s:''},V={s:'home'},G='annee',ANIM=true,OPEN={i:1,q:1,b:1,e:1},pend=0,chain=Promise.resolve();
 const toast=m=>{const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>t.hidden=true,3500)};
 const setSt=(m,bad)=>{$('#st').textContent=m;$('#st').style.color=bad?'#b3261e':''};
 const run=fn=>{pend++;chain=chain.then(fn).then(r=>{if(r&&r.error)throw r.error;if(!--pend)setSt('Enregistré sur ton compte')}).catch(e=>{pend=Math.max(0,pend-1);setSt('⚠ Non enregistré : '+(e.message||e)+'. Réessaie ou exporte en CSV.',true)})};
@@ -59,19 +65,89 @@ const saveP=id=>run(()=>{const p=P.find(x=>x.id===id);if(!p)return;const{id:_,..
 const delP=id=>run(()=>sb.from('projets').delete().eq('id',id));
 window.addEventListener('beforeunload',e=>{if(pend){e.preventDefault();e.returnValue=''}});
 
-const nextEch=p=>(p.ech||[]).filter(e=>e.date>=today).sort((a,b)=>a.date.localeCompare(b.date))[0];
-const filtered=()=>P.filter(p=>(!flt.y||String(p.annee)===flt.y)&&(!flt.s||p.statut===flt.s)&&(!flt.q||Object.values(p).join(' ').toLowerCase().includes(flt.q.toLowerCase())))
+const FM=Object.fromEntries(F.map(f=>[f[0],f]));
+const cur=()=>P.find(x=>x.id===V.id);
+const nextEch=p=>['Refusé','Annulé'].includes(p.statut)?null:(p.ech||[]).filter(e=>e.date&&!e.done).sort((a,b)=>a.date.localeCompare(b.date))[0];
+const days=d=>Math.round((new Date(d)-new Date(today))/864e5);
+const filtered=()=>P.filter(p=>(!flt.s||p.statut===flt.s)&&(!flt.q||[p.acr,p.prog,p.disp,p.call,p.labo,p.porteur,p.contact,p.statut,p.annee,p.notes].join(' ').toLowerCase().includes(flt.q.toLowerCase())))
   .sort((a,b)=>(b.annee||0)-(a.annee||0)||(a.acr||'').localeCompare(b.acr||''));
-
-function list(){
-  const ys=[...new Set(P.map(p=>p.annee).filter(Boolean))].sort((a,b)=>b-a),L=filtered();
-  const rows=L.map(p=>{const e=nextEch(p);return `<tr data-id="${esc(p.id)}"><td><b>${esc(p.acr)}</b></td><td>${esc(p.annee)}</td><td>${esc(p.prog)}<br><small>${esc(p.disp)}</small></td><td>${esc(p.labo)}</td><td>${esc(p.porteur)}</td><td><span class="bd" style="background:${COL[p.statut]}">${esc(p.statut)}</span></td><td>${p.budget?eur(p.budget):''}</td><td>${e?dfr(e.date)+' · '+esc(e.label):''}</td></tr>`}).join('');
-  $('#v').innerHTML=`<div class="fl"><input id="q" type="search" placeholder="Rechercher…" value="${esc(flt.q)}"><select id="fy"><option value="">Toutes les années</option>${ys.map(y=>`<option${String(y)===flt.y?' selected':''}>${y}</option>`).join('')}</select><select id="fs"><option value="">Tous les statuts</option>${STAT.map(s=>`<option${s===flt.s?' selected':''}>${s}</option>`).join('')}</select></div>
-  ${L.length?`<div class="tw"><table><thead><tr><th>Acronyme</th><th>Année</th><th>Programme / dispositif</th><th>Laboratoire</th><th>Porteur</th><th>Statut</th><th>Budget</th><th>Prochaine échéance</th></tr></thead><tbody>${rows}</tbody></table></div>`:`<p class="sub">${P.length?'Aucun projet ne correspond.':'Aucun projet pour l’instant : clique sur « Nouveau projet ».'}</p>`}`;
-  $('#q').oninput=e=>{flt.q=e.target.value;const pos=e.target.selectionStart;list();const q=$('#q');q.focus();q.setSelectionRange(pos,pos)};
-  $('#fy').onchange=e=>{flt.y=e.target.value;list()};$('#fs').onchange=e=>{flt.s=e.target.value;list()};
-  $('#v').querySelectorAll('tr[data-id]').forEach(r=>r.onclick=()=>form(r.dataset.id));
+const tabsHtml=()=>`<div class="seg">${[['list','Projets'],['stats','Statistiques']].map(([k,l])=>`<button data-t="${k}" aria-pressed="${tab===k}">${l}</button>`).join('')}</div>`;
+const chip=p=>{const e=nextEch(p);if(!e)return '';const d=days(e.date);return `<span class="ch${d<0?' late':d<=14?' soon':''}">${d<0?'En retard · ':''}${dfr(e.date)} · ${esc(e.label)}</span>`};
+const card=(p,i)=>`<button class="pc" data-id="${esc(p.id)}" style="--bc:${COL[p.statut]};--d:${Math.min(i,14)*40}ms"><span class="bd" style="background:${COL[p.statut]}">${esc(p.statut)}</span><h3>${esc(p.acr||'Sans titre')}</h3><p>${esc([p.prog,p.disp].filter(Boolean).join(' · '))}</p><p class="m">${esc([p.labo,p.porteur].filter(Boolean).join(' — '))}</p><div class="ft"><span>${p.budget?eur(p.budget):''}</span>${chip(p)}</div></button>`;
+function cards(){
+  const L=filtered(),m=new Map();
+  L.forEach(p=>{const g=G==='statut'?p.statut:String(p[G]||'Non renseigné');if(!m.has(g))m.set(g,[]);m.get(g).push(p)});
+  const ks=[...m.keys()].sort(G==='annee'?(a,b)=>b.localeCompare(a,'fr',{numeric:true}):G==='statut'?(a,b)=>STAT.indexOf(a)-STAT.indexOf(b):(a,b)=>a.localeCompare(b));let i=0;
+  $('#cards').innerHTML=ks.length?ks.map(g=>`<div class="gh">${esc(g)}<small>${m.get(g).length} projet${m.get(g).length>1?'s':''}</small></div><div class="pcs">${m.get(g).map(p=>card(p,i++)).join('')}</div>`).join(''):`<p class="sub">${P.length?'Aucun projet ne correspond.':'Aucun projet pour l’instant : clique sur « Nouveau projet ».'}</p>`;
 }
+function home(){
+  const A=P.filter(p=>p.statut==='Accepté'),D=P.filter(p=>DECIDES.includes(p.statut)),S=P.filter(p=>SOUMIS.includes(p.statut));
+  const k=(v,l)=>`<div class="stat"><span class="v">${v}</span><small>${l}</small></div>`;
+  const pipe=STAT.map(s=>{const n=P.filter(p=>p.statut===s).length;return n?`<button class="pp" data-s="${s}" aria-pressed="${flt.s===s}" style="flex:${n};--c:${COL[s]}" title="${s}"><b>${n}</b><span>${s}</span></button>`:''}).join('');
+  const up=P.map(p=>({p,e:nextEch(p)})).filter(x=>x.e).sort((a,b)=>a.e.date.localeCompare(b.e.date)).slice(0,4);
+  $('#v').innerHTML=`${tabsHtml()}<div class="stats">${k(S.length,'projets déposés')}${k(A.length,'acceptés')}${k(D.length?Math.round(A.length/D.length*100)+' %':'–','taux de succès')}${k(eur(A.reduce((t,p)=>t+(+p.budget||0),0)),'budget accepté')}</div>
+  ${up.length?`<p class="hint" style="margin:14px 0 6px">Prochaines échéances</p><div class="facts">${up.map(({p,e})=>`<button class="lnk" data-id="${esc(p.id)}" style="text-decoration:none"><span class="ch${days(e.date)<0?' late':days(e.date)<=14?' soon':''}"><b>${esc(p.acr)}</b> · ${dfr(e.date)} · ${esc(e.label)}</span></button>`).join('')}</div>`:''}
+  <div class="pipe">${pipe}</div><p class="hint">${flt.s?`Filtre : ${esc(flt.s)} · <button class="lnk" data-s="">tout afficher</button>`:'Clique sur un statut pour filtrer.'}</p>
+  <div class="bar"><div class="seg">${[['annee','Année'],['statut','Statut'],['prog','Programme'],['labo','Laboratoire']].map(([k,l])=>`<button data-g="${k}" aria-pressed="${G===k}">${l}</button>`).join('')}</div><div><button class="btn" data-a="csv">Exporter CSV</button> <button class="btn p" data-a="add">Nouveau projet</button></div></div>
+  <div class="fl"><input id="q" type="search" placeholder="Rechercher un projet, un labo, un porteur…" value="${esc(flt.q)}"></div><div id="cards"></div>`;
+  cards();$('#q').oninput=e=>{flt.q=e.target.value;cards()};
+}
+function page(){
+  const p=cur();if(!p){V={s:'home'};return home()}
+  document.documentElement.style.setProperty('--bc',COL[p.statut]);
+  const dl=(n,k)=>`<datalist id="dl-${n}">${[...new Set([...(DEF[n]||[]),...P.map(x=>x[k]).filter(Boolean)])].map(v=>`<option value="${esc(v)}">`).join('')}</datalist>`;
+  const fld=k=>{const[,l,t,d]=FM[k];return `<div><label>${l}</label><input data-k="${k}" type="${t}"${d?` list="dl-${d}"`:''} value="${esc(p[k])}"${t==='number'?' min="0" step="any"':''}${k==='mois'?' placeholder="auto"':''}></div>`};
+  const sec=(id,t,ks)=>`<details data-d="${id}"${OPEN[id]?' open':''}><summary>${t}</summary><div class="g">${ks.map(fld).join('')}</div></details>`;
+  const ech=p.ech||[];
+  $('#v').innerHTML=`<div class="top"><button class="lnk" data-a="back">← Tous les projets</button></div>
+  <input class="ttl" data-k="acr" placeholder="Acronyme du projet" value="${esc(p.acr)}">
+  <p class="sub">${esc([p.prog,p.disp,p.call].filter(Boolean).join(' · '))||'Complète les informations ci-dessous'}</p>
+  <div class="mood">${STAT.map(s=>`<button data-st="${s}" aria-pressed="${p.statut===s}">${s}</button>`).join('')}</div>
+  ${sec('i','Identité du projet',['annee','prog','disp','call','role'])}${sec('q','Équipe interne',['labo','porteur','contact'])}${sec('b','Budget et calendrier',['budget','debut','fin','mois'])}
+  <details data-d="e"${OPEN.e?' open':''}><summary>Échéances${ech.length?` (${ech.length})`:''}</summary>${ech.map((e,i)=>`<div class="er"><input type="checkbox" data-ei="${i}" data-ef="done" title="Fait"${e.done?' checked':''}><input type="date" data-ei="${i}" data-ef="date" value="${esc(e.date)}"><input type="text" data-ei="${i}" data-ef="label" placeholder="Intitulé" value="${esc(e.label)}"><button type="button" class="lnk" data-x="${i}">Retirer</button></div>`).join('')}<button class="btn" data-a="ae">+ Ajouter une échéance</button></details>
+  <details data-d="n"${OPEN.n?' open':''}><summary>Notes</summary><textarea data-n="1" rows="5">${esc(p.notes)}</textarea></details>
+  ${dl('prog','prog')+dl('disp','disp')+dl('role','role')+dl('labo','labo')+dl('por','porteur')}
+  <div class="nav"><button class="btn" data-a="back">← Retour</button><button class="btn" data-a="del">Supprimer ce projet</button></div>`;
+}
+function render(){
+  document.documentElement.style.setProperty('--bc','#5b3fd1');
+  document.querySelector('h1').hidden=V.s==='proj';
+  const an=ANIM;ANIM=false;
+  if(V.s==='proj')page();else if(tab==='stats')stats();else home();
+  $('#v').classList.toggle('an',an);
+}
+let tT=0,tId='';
+const touch=p=>{delete p._new;tId=p.id;clearTimeout(tT);setSt('Modification en cours…');tT=setTimeout(()=>{tT=0;saveP(p.id)},600)};
+const flush=()=>{if(tT){clearTimeout(tT);tT=0;saveP(tId)}};
+const keep=()=>{const y=scrollY;render();scrollTo(0,y)};
+const go=v=>{flush();V=v;ANIM=true;render();scrollTo(0,0)};
+document.addEventListener('visibilitychange',()=>{if(document.hidden)flush()});
+window.addEventListener('beforeunload',e=>{if(tT){e.preventDefault();e.returnValue=''}});
+$('#v').addEventListener('toggle',e=>{if(e.target.dataset&&e.target.dataset.d)OPEN[e.target.dataset.d]=e.target.open},true);
+$('#v').addEventListener('input',e=>{
+  const t=e.target,p=V.s==='proj'&&cur();if(!p)return;
+  if(t.dataset.k){const k=t.dataset.k;p[k]=['annee','budget','mois'].includes(k)&&t.value!==''?+t.value:t.value;
+    if(k==='mois')p.moisAuto=false;
+    if((k==='debut'||k==='fin')&&p.debut&&p.fin&&(p.mois===''||p.mois==null||p.moisAuto)){p.mois=Math.max(0,Math.round((new Date(p.fin)-new Date(p.debut))/2629800000));p.moisAuto=true;$('[data-k=mois]').value=p.mois}
+    touch(p)}
+  else if(t.dataset.ei!==undefined){const x=p.ech[t.dataset.ei];if(t.type==='checkbox')x.done=t.checked;else x[t.dataset.ef]=t.value;touch(p)}
+  else if(t.dataset.n){p.notes=t.value;touch(p)}
+});
+$('#v').addEventListener('click',e=>{
+  const b=e.target.closest('[data-a],[data-t],[data-g],[data-s],[data-id],[data-st],[data-x]');if(!b)return;const d=b.dataset;
+  if(d.t){tab=d.t;ANIM=true;render()}
+  else if(d.g){G=d.g;render()}
+  else if(d.s!==undefined){flt.s=flt.s===d.s?'':d.s;render()}
+  else if(d.id)go({s:'proj',id:d.id});
+  else if(d.st){const p=cur();p.statut=d.st;touch(p);keep()}
+  else if(d.x!==undefined){const p=cur();p.ech.splice(+d.x,1);touch(p);keep()}
+  else if(d.a==='ae'){const p=cur();(p.ech=p.ech||[]).push({date:'',label:''});OPEN.e=1;touch(p);keep()}
+  else if(d.a==='back'){const p=cur();if(p&&p._new)P=P.filter(x=>x!==p);go({s:'home'})}
+  else if(d.a==='add'){const p={id:'p-'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),statut:'Brouillon',annee:new Date().getFullYear(),ech:[],_new:true};P.push(p);go({s:'proj',id:p.id})}
+  else if(d.a==='del'){const p=cur();if(confirm('Supprimer « '+(p.acr||'ce projet')+' » ? Une copie reste dans l’historique de la base.')){clearTimeout(tT);tT=0;P=P.filter(x=>x!==p);if(!p._new)delP(p.id);go({s:'home'})}}
+  else if(d.a==='csv')csv();
+});
+$('#out').onclick=()=>Auth.out();
 const grp=(L,k)=>{const m={};L.forEach(p=>{const n=String(p[k]||'Non renseigné');const o=m[n]||(m[n]={n:0,a:0});o.n++;if(p.statut==='Accepté')o.a++});return Object.entries(m)};
 const byN=r=>r.sort((x,y)=>y[1].n-x[1].n||x[0].localeCompare(y[0]));
 const panel=(t,rows,c)=>{const mx=Math.max(1,...rows.map(r=>r[1].n));return `<div class="stat"><h3>${t}</h3>${rows.length?rows.map(([k,o])=>`<div class="br"><span title="${esc(k)}">${esc(k)}</span><i style="width:${o.n/mx*100}%;--c:${c||'var(--acc)'}"></i><span>${o.n}${o.a?` · ${o.a} ✓`:''}</span></div>`).join(''):'<p class="hint">Pas encore de données.</p>'}</div>`};
@@ -79,8 +155,8 @@ function stats(){
   const S=P.filter(p=>SOUMIS.includes(p.statut)),A=P.filter(p=>p.statut==='Accepté'),D=P.filter(p=>DECIDES.includes(p.statut));
   const sum=L=>L.reduce((t,p)=>t+(+p.budget||0),0),taux=D.length?Math.round(A.length/D.length*100)+' %':'–';
   const k=(v,l)=>`<div class="stat"><span class="v">${v}</span><small>${l}</small></div>`;
-  const ech=P.filter(p=>!['Refusé','Annulé'].includes(p.statut)).flatMap(p=>(p.ech||[]).filter(e=>e.date>=today).map(e=>({...e,acr:p.acr}))).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,8);
-  $('#v').innerHTML=`<div class="stats">${k(P.length,'projets suivis')}${k(S.length,'déposés')}${k(A.length,'acceptés')}${k(taux,'taux de succès*')}${k(eur(sum(S)),'budget déposé')}${k(eur(sum(A)),'budget accepté')}${k(P.filter(p=>['Brouillon','En préparation'].includes(p.statut)).length,'en préparation')}</div>
+  const ech=P.filter(p=>!['Refusé','Annulé'].includes(p.statut)).flatMap(p=>(p.ech||[]).filter(e=>e.date>=today&&!e.done).map(e=>({...e,acr:p.acr}))).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,8);
+  $('#v').innerHTML=tabsHtml()+`<div class="stats">${k(P.length,'projets suivis')}${k(S.length,'déposés')}${k(A.length,'acceptés')}${k(taux,'taux de succès*')}${k(eur(sum(S)),'budget déposé')}${k(eur(sum(A)),'budget accepté')}${k(P.filter(p=>['Brouillon','En préparation'].includes(p.statut)).length,'en préparation')}</div>
   <div class="pn">${panel('Déposés par année',grp(S,'annee').sort((a,b)=>a[0].localeCompare(b[0])))}
   ${panel('Par statut',STAT.map(s=>[s,{n:P.filter(p=>p.statut===s).length,a:0}]).filter(r=>r[1].n),'#8e5bd1')}
   ${panel('Laboratoires qui déposent le plus',byN(grp(S,'labo')).slice(0,10),'#3b7fd4')}
@@ -89,29 +165,7 @@ function stats(){
   <div class="stat"><h3>Échéances à venir</h3>${ech.length?ech.map(e=>`<div class="br" style="grid-template-columns:5.5rem 1fr"><span>${dfr(e.date)}</span><span><b>${esc(e.acr)}</b> · ${esc(e.label)}</span></div>`).join(''):'<p class="hint">Aucune échéance à venir.</p>'}</div></div>
   <p class="hint" style="margin-top:14px">Déposé = statuts Déposé, Accepté, Refusé ou Liste complémentaire. ✓ = acceptés. *Taux de succès = acceptés ÷ projets ayant reçu une décision (acceptés, refusés, liste complémentaire).</p>`;
 }
-const render=()=>{$('#tabs').innerHTML=[['list','Projets'],['stats','Statistiques']].map(([k,l])=>`<button data-t="${k}" aria-pressed="${tab===k}">${l}</button>`).join('');tab==='list'?list():stats()};
-$('#tabs').onclick=e=>{const b=e.target.closest('button');if(b){tab=b.dataset.t;render()}};
-
-function form(id){
-  const p=id?P.find(x=>x.id===id):{statut:'Brouillon',annee:new Date().getFullYear()};let ech=(p.ech||[]).map(e=>({...e}));
-  const dl=(n,k)=>`<datalist id="dl-${n}">${[...new Set([...(DEF[n]||[]),...P.map(x=>x[k]).filter(Boolean)])].map(v=>`<option value="${esc(v)}">`).join('')}</datalist>`;
-  const inp=([k,l,t,d])=>`<div><label>${l}</label>${t==='select'?`<select name="${k}">${STAT.map(s=>`<option${p.statut===s?' selected':''}>${s}</option>`).join('')}</select>`:`<input name="${k}" type="${t}"${d?` list="dl-${d}"`:''} value="${esc(p[k])}"${k==='acr'?' required':''}${t==='number'?' min="0" step="any"':''}${k==='mois'?' placeholder="auto"':''}>`}</div>`;
-  const dlg=$('#dlg');
-  dlg.innerHTML=`<form id="pf"><h2>${id?'Modifier le projet':'Nouveau projet'}</h2><div class="g">${F.map(inp).join('')}</div><label style="margin-top:16px">Échéances</label><div id="ech"></div><button type="button" class="btn" id="ae">+ Ajouter une échéance</button><label style="margin-top:16px">Notes</label><textarea name="notes" rows="3">${esc(p.notes)}</textarea>${dl('prog','prog')+dl('disp','disp')+dl('role','role')+dl('labo','labo')+dl('por','porteur')}<div class="fa">${id?'<button type="button" class="btn" id="del">Supprimer</button>':''}<button type="button" class="btn" id="cx">Annuler</button><button class="btn p">Enregistrer</button></div></form>`;
-  const re=()=>{$('#ech').innerHTML=ech.map((e,i)=>`<div class="er"><input type="date" data-i="${i}" data-f="date" value="${esc(e.date)}"><input type="text" data-i="${i}" data-f="label" placeholder="Intitulé" value="${esc(e.label)}"><button type="button" class="lnk" data-x="${i}">Retirer</button></div>`).join('')};re();
-  $('#ech').oninput=e=>{const t=e.target;if(t.dataset.i)ech[t.dataset.i][t.dataset.f]=t.value};
-  $('#ech').onclick=e=>{const x=e.target.dataset.x;if(x!==undefined){ech.splice(+x,1);re()}};
-  $('#ae').onclick=()=>{ech.push({date:'',label:''});re()};$('#cx').onclick=()=>dlg.close();
-  if(id)$('#del').onclick=()=>{if(confirm('Supprimer « '+p.acr+' » ? Une copie reste dans l’historique de la base.')){P=P.filter(x=>x.id!==id);delP(id);dlg.close();render()}};
-  $('#pf').onsubmit=e=>{e.preventDefault();const f=Object.fromEntries(new FormData(e.target));
-    ['annee','budget','mois'].forEach(k=>f[k]=f[k]===''?'':+f[k]);
-    if(f.mois===''&&f.debut&&f.fin)f.mois=Math.max(0,Math.round((new Date(f.fin)-new Date(f.debut))/2629800000));
-    const o={...p,...f,id:id||'p-'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),ech:ech.filter(x=>x.date||x.label)};
-    P=id?P.map(x=>x.id===id?o:x):[...P,o];saveP(o.id);dlg.close();render();toast('Projet enregistré')};
-  dlg.showModal();
-}
-$('#add').onclick=()=>form();$('#out').onclick=()=>Auth.out();
-$('#csv').onclick=()=>{const c=v=>'"'+String(v??'').replace(/"/g,'""')+'"',H=F.map(f=>f[1]).concat(['Échéances','Notes']);
+const csv=()=>{const c=v=>'"'+String(v??'').replace(/"/g,'""')+'"',H=F.map(f=>f[1]).concat(['Échéances','Notes']);
   const t=[H.map(c).join(';')].concat(filtered().map(p=>F.map(f=>c(p[f[0]])).concat([c((p.ech||[]).map(e=>e.date+' '+e.label).join(' | ')),c(p.notes)]).join(';'))).join('\r\n');
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+t],{type:'text/csv'}));a.download='projets.csv';a.click()};
 
