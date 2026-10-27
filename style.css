@@ -46,7 +46,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px soli
 .tile small{display:block;color:var(--mute);font:.78rem 'Instrument Sans',sans-serif;font-weight:400}
 .x{background:none;border:0;color:var(--mute);cursor:pointer;padding:10px}
 .row{display:flex;gap:8px;margin-top:18px}.row input{flex:1}
-input[type=text],input[type=date],input[type=email],input[type=password],textarea{width:100%;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:11px 14px}
+input[type=text],input[type=number],input[type=search],input[type=date],input[type=email],input[type=password],textarea{width:100%;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:11px 14px}
 textarea{line-height:1.7;resize:vertical}
 label{display:block;margin:14px 0 5px;font-size:.88rem;color:var(--mute)}
 .mood{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 4px}
