@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>To-do</title>
+<meta name="robots" content="noindex,nofollow">
+<link rel="stylesheet" href="style.css">
+<style>
+select{font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.hero{display:flex;align-items:center;gap:18px;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px 20px;margin-top:18px}
+.rgw{position:relative;width:80px;flex:none}.rgw b{position:absolute;inset:0;display:grid;place-items:center;font:700 1.05rem 'Fraunces',serif}
+.rg{width:80px;transform:rotate(-90deg)}.rg circle{fill:none;stroke:var(--line);stroke-width:8}.rg .pg{stroke:var(--acc);stroke-linecap:round;transition:stroke-dasharray .6s}
+.hero h2{margin:0;font:700 1.4rem 'Fraunces',serif}.hero p{margin:4px 0 0;color:var(--mute);font:.9rem 'Instrument Sans',sans-serif}
+.r1{display:flex;gap:8px;margin-top:16px}.r1 input{flex:1}
+.r2{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.r2>*{flex:1 1 130px;width:auto}
+.fl2{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:18px}
+.cp{border:1px solid var(--line);background:var(--card);border-radius:99px;padding:5px 13px;font:.85rem 'Instrument Sans',sans-serif;cursor:pointer}
+.cp[aria-pressed=true]{background:var(--acc);color:var(--accink);border-color:var(--acc)}
+ul{padding:0;margin:18px 0 0}
+.tk{display:flex;gap:12px;align-items:flex-start;background:var(--card);border:1px solid var(--line);border-left:6px solid var(--c);border-radius:14px;padding:12px 14px;margin-bottom:10px;list-style:none;transition:opacity .3s}
+.an .tk{animation:up .4s cubic-bezier(.2,.7,.2,1) var(--d,0ms) backwards}
+.ck{width:28px;height:28px;border-radius:50%;border:2px solid var(--c);background:transparent;display:grid;place-items:center;cursor:pointer;flex:none;padding:0}
+.ck svg{width:16px;fill:none;stroke:#fff;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:24;stroke-dashoffset:24;transition:stroke-dashoffset .3s .05s}
+.dn .ck{background:var(--c);animation:pop .35s}.dn .ck svg{stroke-dashoffset:0}
+@keyframes pop{50%{transform:scale(1.3)}}
+.dn{opacity:.7}.dn .tt{text-decoration:line-through;color:var(--mute)}
+.bd{flex:1;min-width:0}.tt{cursor:text;word-break:break-word;line-height:1.5}
+.mt{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;font:.8rem 'Instrument Sans',sans-serif}
+.mt span{border-radius:99px;padding:2px 10px;background:color-mix(in srgb,var(--acc) 12%,var(--card))}
+.mt .soon{background:#d98a1c;color:#fff}.mt .late{background:#b3261e;color:#fff}
+.ed2{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}.ed2>*{flex:1 1 120px;width:auto}
+.dot{width:14px;height:14px;border-radius:50%;background:var(--c);border:0;cursor:pointer;margin-top:7px;flex:none;padding:0}
+.cf{position:fixed;width:9px;height:14px;border-radius:2px;z-index:50;pointer-events:none;animation:cf 1.3s cubic-bezier(.2,.6,.3,1) forwards}
+@keyframes cf{40%{transform:translate(calc(var(--x)*.6),var(--y)) rotate(var(--r))}to{transform:translate(var(--x),calc(var(--y) + 560px)) rotate(var(--r));opacity:0}}
+</style>
+</head>
+<body>
+<main>
+  <div class="top"><a href="index.html">← Accueil</a><button class="lnk" id="out">Se déconnecter</button></div>
+  <h1>To-do</h1>
+  <p class="sub" id="st">Chargement…</p>
+  <div class="hero" id="hero"></div>
+  <form id="add">
+    <div class="r1"><input id="nt" type="text" placeholder="Ajouter une tâche…" required maxlength="200" autocomplete="off"><button class="btn p">Ajouter</button></div>
+    <div class="r2"><select id="np" aria-label="Priorité"><option value="h">Priorité haute</option><option value="n" selected>Priorité normale</option><option value="b">Priorité basse</option></select><input id="nd" type="date" aria-label="Échéance"><input id="nl" type="text" list="dl" placeholder="Liste (Perso, Travail…)" maxlength="40"></div>
+  </form>
+  <datalist id="dl"></datalist>
+  <div class="fl2" id="fl"></div>
+  <ul id="list"></ul>
+  <p class="hint"><button class="lnk" id="clr">Supprimer les tâches terminées</button> · Clique sur un titre pour le modifier, sur le point coloré pour changer la priorité.</p>
+</main>
+<div id="toast" role="status" hidden></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.4/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script>
+(async()=>{
+const u=await Auth.guard();if(!u)return;
+const sb=Auth.sb,UID=u.id,$=s=>document.querySelector(s);
+const PR={h:'#c0392b',n:'#5b3fd1',b:'#8a84a3'};
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const today=new Date().toLocaleDateString('sv-SE');
+const days=d=>Math.round((new Date(d)-new Date(today))/864e5);
+const dd=d=>d===today?'Aujourd’hui':days(d)===1?'Demain':new Date(d+'T00:00').toLocaleDateString('fr-FR',{day:'numeric',month:'short'});
+let T=[],view='todo',L='',editing=null,ANIM=true,pend=0,chain=Promise.resolve(),tm=0;
+const setSt=(m,bad)=>{$('#st').textContent=m;$('#st').style.color=bad?'#b3261e':''};
+const run=fn=>{pend++;chain=chain.then(fn).then(r=>{if(r&&r.error)throw r.error;if(!--pend)setSt('Enregistré sur ton compte')}).catch(e=>{pend=Math.max(0,pend-1);setSt('⚠ Non enregistré : '+(e.message||e),true)})};
+const save=id=>run(()=>{const x=T.find(y=>y.id===id);if(!x)return;const{id:_,...data}=x;return sb.from('taches').upsert({id,user_id:UID,data},{onConflict:'user_id,id'})});
+const del=ids=>run(()=>sb.from('taches').delete().in('id',ids));
+window.addEventListener('beforeunload',e=>{if(pend){e.preventDefault();e.returnValue=''}});
+
+function boom(){for(let i=0;i<30;i++){const s=document.createElement('i');s.className='cf';s.style.cssText=`--x:${(Math.random()-.5)*600}px;--y:${-180-Math.random()*280}px;--r:${Math.random()*720}deg;background:${['#5b3fd1','#1fa37a','#d98a1c','#c0392b','#3b7fd4'][i%5]};left:50%;top:55%`;document.body.appendChild(s);setTimeout(()=>s.remove(),1400)}}
+function hero(){
+  const o=T.filter(x=>!x.done).length,p=T.length?(T.length-o)/T.length:0,dt=T.filter(x=>x.doneAt===today).length,h=new Date().getHours();
+  $('#hero').innerHTML=`<div class="rgw"><svg class="rg" viewBox="0 0 80 80"><circle cx="40" cy="40" r="34"/><circle class="pg" cx="40" cy="40" r="34" stroke-dasharray="${p*213.6} 213.6"/></svg><b>${T.length?Math.round(p*100)+' %':'–'}</b></div>
+  <div><h2>${h<12?'Bonjour':h<18?'Bon après-midi':'Bonsoir'}</h2><p>${o?`${o} tâche${o>1?'s':''} à faire${dt?` · ${dt} terminée${dt>1?'s':''} aujourd’hui`:''}`:T.length?'Tout est fait 🎉':'Ajoute ta première tâche ci-dessus.'}</p></div>`;
+}
+function filters(){
+  const ls=[...new Set(T.map(x=>x.list).filter(Boolean))].sort((a,b)=>a.localeCompare(b));if(L&&!ls.includes(L))L='';
+  const n=f=>T.filter(f).length;
+  $('#dl').innerHTML=ls.map(v=>`<option value="${esc(v)}">`).join('');
+  $('#fl').innerHTML=`<div class="seg">${[['todo',`À faire (${n(x=>!x.done)})`],['done',`Terminées (${n(x=>x.done)})`],['all','Toutes']].map(([k,l])=>`<button data-v="${k}" aria-pressed="${view===k}">${l}</button>`).join('')}</div>${ls.length?`<button class="cp" data-l="" aria-pressed="${L===''}">Toutes les listes</button>`+ls.map(v=>`<button class="cp" data-l="${esc(v)}" aria-pressed="${L===v}">${esc(v)}</button>`).join(''):''}`;
+}
+function row(x,i){
+  const d=x.due?days(x.due):null,cl=x.done||d===null?'':d<0?' late':d<=1?' soon':'',c=PR[x.prio||'n'];
+  const body=editing===x.id?`<input class="ed" data-f="t" type="text" value="${esc(x.t)}" maxlength="200"><div class="ed2"><input type="date" data-f="due" value="${esc(x.due)}"><input type="text" data-f="list" list="dl" placeholder="Liste" value="${esc(x.list)}"><button class="btn p" data-a="ok">OK</button><button class="btn" data-a="cx">Annuler</button></div>`
+    :`<span class="tt" data-a="ed">${esc(x.t)}</span><div class="mt">${x.list?`<span>${esc(x.list)}</span>`:''}${x.due?`<span class="${cl.trim()}">${d<0&&!x.done?'En retard · ':''}${dd(x.due)}</span>`:''}</div>`;
+  return `<li class="tk${x.done?' dn':''}" data-id="${esc(x.id)}" style="--c:${c};--d:${Math.min(i,12)*35}ms"><button class="ck" data-a="tg" aria-pressed="${!!x.done}" aria-label="Terminer"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button><div class="bd">${body}</div><button class="dot" data-a="pr" title="Changer la priorité" aria-label="Priorité"></button><button class="lnk" data-a="rm" aria-label="Supprimer">✕</button></li>`;
+}
+function list(){
+  const V=T.filter(x=>(view==='all'||(view==='done')===!!x.done)&&(!L||x.list===L))
+   .sort((a,b)=>(!!a.done-!!b.done)||(a.done&&b.done?(b.doneAt||'').localeCompare(a.doneAt||''):0)||(a.due||'9').localeCompare(b.due||'9')||'hnb'.indexOf(a.prio||'n')-'hnb'.indexOf(b.prio||'n')||a.t.localeCompare(b.t));
+  const ul=$('#list');ul.classList.toggle('an',ANIM);ANIM=false;
+  ul.innerHTML=V.length?V.map(row).join(''):`<li class="sub" style="list-style:none">${view==='done'?'Aucune tâche terminée.':T.length?'Rien à afficher ici 🎉':'Aucune tâche pour l’instant.'}</li>`;
+  if(editing){const i=ul.querySelector('[data-f=t]');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}}
+}
+const all=()=>{hero();filters();list()};
+$('#add').onsubmit=e=>{e.preventDefault();const t=$('#nt').value.trim();if(!t)return;
+  const x={id:'t-'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),t,done:false,prio:$('#np').value,due:$('#nd').value,list:$('#nl').value.trim(),doneAt:''};
+  T.push(x);save(x.id);$('#nt').value='';$('#nd').value='';view=view==='done'?'todo':view;ANIM=true;all();$('#nt').focus()};
+$('#fl').onclick=e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.v)view=b.dataset.v;else if(b.dataset.l!==undefined)L=b.dataset.l;ANIM=true;filters();list()};
+$('#list').addEventListener('click',e=>{
+  const b=e.target.closest('[data-a]');if(!b)return;const li=b.closest('li'),x=T.find(y=>y.id===li.dataset.id);if(!x)return;const a=b.dataset.a;
+  if(a==='tg'){x.done=!x.done;x.doneAt=x.done?today:'';save(x.id);li.classList.toggle('dn',x.done);b.setAttribute('aria-pressed',x.done);if(x.done&&!T.some(y=>!y.done))boom();hero();filters();clearTimeout(tm);tm=setTimeout(list,550)}
+  else if(a==='ed'){editing=x.id;list()}
+  else if(a==='ok'){const f={};li.querySelectorAll('[data-f]').forEach(i=>f[i.dataset.f]=i.value.trim());if(f.t){Object.assign(x,f);save(x.id)}editing=null;all()}
+  else if(a==='cx'){editing=null;list()}
+  else if(a==='pr'){x.prio=(x.prio||'n')==='h'?'n':x.prio==='n'?'b':'h';save(x.id);list()}
+  else if(a==='rm'){T=T.filter(y=>y!==x);del([x.id]);all()}
+});
+$('#list').addEventListener('keydown',e=>{if(!editing)return;if(e.key==='Enter'&&e.target.dataset.f){e.preventDefault();e.target.closest('li').querySelector('[data-a=ok]').click()}else if(e.key==='Escape'){editing=null;list()}});
+$('#clr').onclick=()=>{const ids=T.filter(x=>x.done).map(x=>x.id);if(ids.length&&confirm('Supprimer '+ids.length+' tâche(s) terminée(s) ?')){T=T.filter(x=>!x.done);del(ids);all()}};
+$('#out').onclick=()=>Auth.out();
+const{data,error}=await sb.from('taches').select('id,data');
+if(error){setSt(/relation|does not exist|schema cache/i.test(error.message)?'⚠ La table « taches » n’existe pas encore : lance supabase_taches.sql dans Supabase.':'⚠ Chargement impossible : '+error.message,true);return}
+T=data.map(r=>({...r.data,id:r.id}));setSt('Enregistré sur ton compte');all();
+})();
+</script>
+</body>
+</html>
