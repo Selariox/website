@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Entraînements</title>
+<meta name="robots" content="noindex,nofollow">
+<link rel="stylesheet" href="style.css">
+<style>
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:18px;margin-top:18px;align-items:start}
+.box{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px}
+.nv{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}
+.nv h2{margin:0;font:700 1.35rem 'Fraunces',serif;text-transform:capitalize}
+.nv button{border:1px solid var(--line);background:var(--card);border-radius:10px;padding:6px 12px;cursor:pointer;font-size:1rem}
+.gr{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.wd{text-align:center;color:var(--mute);font:600 .75rem 'Instrument Sans',sans-serif;padding-bottom:2px}
+.dc{position:relative;aspect-ratio:1;border:1px solid var(--line);border-radius:12px;background:color-mix(in srgb,var(--acc) var(--p,0%),var(--card));cursor:pointer;font:600 .95rem 'Instrument Sans',sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:0;transition:transform .15s}
+.dc:hover{transform:translateY(-2px)}.dc i{font-style:normal;font-size:.5rem;letter-spacing:1px;color:var(--acc);line-height:1}
+.dc.td{border:2px solid var(--acc)}.dc[aria-pressed=true]{background:var(--acc);color:var(--accink);border-color:var(--acc)}.dc[aria-pressed=true] i{color:var(--accink)}
+.dc.e{visibility:hidden}
+.ph h2{margin:0;font:700 1.35rem 'Fraunces',serif}.ph p{margin:4px 0 14px;color:var(--mute);font:.88rem 'Instrument Sans',sans-serif}
+.xr{border:1px solid var(--line);border-left:6px solid var(--acc);border-radius:14px;padding:12px;margin-bottom:12px;animation:up .35s cubic-bezier(.2,.7,.2,1) var(--d,0ms) backwards}
+.x1{display:flex;gap:8px;align-items:center}.x1 input{flex:1;font-weight:600}
+.lh{display:block;color:var(--acc);font:.8rem 'Instrument Sans',sans-serif;margin:4px 0 0;min-height:1em}
+.x2{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:8px 0}
+.x2 label{display:block;font:600 .75rem 'Instrument Sans',sans-serif;color:var(--mute)}
+.x2 input{width:100%;margin-top:3px}
+.xr>input{width:100%}
+.empty{color:var(--mute);text-align:center;padding:18px 0}
+</style>
+</head>
+<body>
+<main>
+  <div class="top"><a href="index.html">← Accueil</a><button class="lnk" id="out">Se déconnecter</button></div>
+  <h1>Entraînements</h1>
+  <p class="sub" id="st">Chargement…</p>
+  <div class="stats" id="stats"></div>
+  <div class="cols"><section class="box" id="cal"></section><section class="box ph" id="panel"></section></div>
+  <datalist id="dx"></datalist>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.4/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script>
+(async()=>{
+const u=await Auth.guard();if(!u)return;
+const sb=Auth.sb,UID=u.id,$=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const iso=(y,m,d)=>y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+const today=new Date().toLocaleDateString('sv-SE');
+const MOIS=['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+const DEFX=['Squat','Développé couché','Soulevé de terre','Tractions','Rowing','Développé militaire','Fentes','Gainage'];
+const fmtD=(k,o)=>new Date(k+'T00:00').toLocaleDateString('fr-FR',o);
+const nf=n=>Math.round(n).toLocaleString('fr-FR');
+let D={},sel=today,M={y:+today.slice(0,4),m:+today.slice(5,7)-1},pend=0,chain=Promise.resolve(),tT=0;
+const setSt=(m,bad)=>{$('#st').textContent=m;$('#st').style.color=bad?'#b3261e':''};
+const run=fn=>{pend++;chain=chain.then(fn).then(r=>{if(r&&r.error)throw r.error;if(!--pend)setSt('Enregistré sur ton compte')}).catch(e=>{pend=Math.max(0,pend-1);setSt('⚠ Non enregistré : '+(e.message||e),true)})};
+const real=d=>d?d.ex.filter(e=>e.n||e.s||e.r||e.w||e.note):[];
+const has=k=>real(D[k]).length>0;
+const saveD=date=>run(()=>{const ex=real(D[date]);return ex.length?sb.from('seances').upsert({id:'d-'+date,user_id:UID,data:{date,ex}},{onConflict:'user_id,id'}):sb.from('seances').delete().eq('id','d-'+date)});
+const touch=()=>{clearTimeout(tT);setSt('Modification en cours…');const k=sel;tT=setTimeout(()=>{tT=0;saveD(k)},600);touch.k=k};
+const flush=()=>{if(tT){clearTimeout(tT);tT=0;saveD(touch.k)}};
+document.addEventListener('visibilitychange',()=>{if(document.hidden)flush()});
+window.addEventListener('beforeunload',e=>{if(tT||pend){e.preventDefault();e.returnValue=''}});
+const vol=e=>(+e.s||0)*(+e.r||0)*(+e.w||0);
+function streak(){let c=0,d=new Date(today+'T00:00');if(!has(today))d.setDate(d.getDate()-1);while(has(d.toLocaleDateString('sv-SE'))){c++;d.setDate(d.getDate()-1)}return c}
+function last(n,date){
+  const k=(n||'').trim().toLowerCase();if(!k)return '';
+  for(const x of Object.keys(D).filter(x=>x<date).sort().reverse()){
+    const e=D[x].ex.find(e=>(e.n||'').trim().toLowerCase()===k);
+    if(e){const sr=(e.s||e.r)?`${e.s||'?'}×${e.r||'?'}`:'';return `Dernière fois (${fmtD(x,{day:'numeric',month:'short'})}) : ${[sr,e.w?e.w+' kg':''].filter(Boolean).join(' à ')||'sans détail'}`}
+  }return '';
+}
+function cal(){
+  const{y,m}=M,off=(new Date(y,m,1).getDay()+6)%7,n=new Date(y,m+1,0).getDate();
+  const ks=Array.from({length:n},(_,i)=>iso(y,m,i+1)),mk=ks.filter(has);
+  const sets=mk.reduce((t,k)=>t+real(D[k]).reduce((a,e)=>a+(+e.s||0),0),0),v=mk.reduce((t,k)=>t+real(D[k]).reduce((a,e)=>a+vol(e),0),0),st=streak();
+  const c=(x,l)=>`<div class="stat"><span class="v">${x}</span><small>${l}</small></div>`;
+  $('#stats').innerHTML=c(mk.length,'séances ce mois')+c(nf(sets),'séries ce mois')+c(nf(v)+' kg','volume ce mois')+c(st?'🔥 '+st:'–',st>1?'jours d’affilée':'jour d’affilée');
+  $('#cal').innerHTML=`<div class="nv"><button data-nav="-1" aria-label="Mois précédent">‹</button><h2>${MOIS[m]} ${y}</h2><button data-nav="1" aria-label="Mois suivant">›</button></div>
+  <div class="gr">${'LMMJVSD'.split('').map(x=>`<span class="wd">${x}</span>`).join('')}${'<span class="dc e"></span>'.repeat(off)}${ks.map((k,i)=>{const c=real(D[k]).length;return `<button class="dc${k===today?' td':''}" data-d="${k}" aria-pressed="${k===sel}" style="--p:${Math.min(c,6)/6*45}%">${i+1}${c?`<i>${'●'.repeat(Math.min(c,4))}</i>`:''}</button>`}).join('')}</div>
+  <p style="text-align:center;margin:12px 0 0"><button class="lnk" data-nav="0">Revenir à aujourd’hui</button></p>`;
+}
+function panel(){
+  const d=D[sel]||{date:sel,ex:[]},t=fmtD(sel,{weekday:'long',day:'numeric',month:'long',year:'numeric'}),r=real(d);
+  const prev=Object.keys(D).filter(x=>x<sel&&has(x)).sort().pop();
+  $('#dx').innerHTML=[...new Set([...DEFX,...Object.values(D).flatMap(x=>x.ex.map(e=>e.n)).filter(Boolean)])].map(v=>`<option value="${esc(v)}">`).join('');
+  $('#panel').innerHTML=`<h2>${t[0].toUpperCase()+t.slice(1)}</h2><p>${r.length?`${r.length} exercice${r.length>1?'s':''} · ${nf(r.reduce((a,e)=>a+(+e.s||0),0))} séries · ${nf(r.reduce((a,e)=>a+vol(e),0))} kg soulevés`:'Aucun exercice enregistré ce jour.'}</p>
+  ${d.ex.map((e,i)=>`<div class="xr" data-i="${i}" style="--d:${Math.min(i,8)*40}ms"><div class="x1"><input type="text" data-k="n" list="dx" placeholder="Exercice (ex. Squat)" value="${esc(e.n)}" maxlength="80"><button class="lnk" data-a="rm" aria-label="Supprimer l’exercice">✕</button></div><small class="lh">${esc(last(e.n,sel))}</small>
+  <div class="x2"><label>Séries<input type="number" data-k="s" min="0" inputmode="numeric" value="${esc(e.s)}"></label><label>Répétitions<input type="number" data-k="r" min="0" inputmode="numeric" value="${esc(e.r)}"></label><label>Poids (kg)<input type="number" data-k="w" min="0" step="0.5" inputmode="decimal" value="${esc(e.w)}"></label></div>
+  <input type="text" data-k="note" placeholder="Note : ressenti, temps de pause, remarque…" value="${esc(e.note)}"></div>`).join('')}
+  <button class="btn p" data-a="add">+ Ajouter un exercice</button>${!r.length&&prev?` <button class="btn" data-a="copy">Reprendre la séance du ${fmtD(prev,{day:'numeric',month:'short'})}</button>`:''}`;
+}
+const all=()=>{cal();panel()};
+const cur=()=>D[sel]||(D[sel]={date:sel,ex:[]});
+$('#cal').addEventListener('click',e=>{
+  const b=e.target.closest('[data-d],[data-nav]');if(!b)return;
+  if(b.dataset.d){flush();sel=b.dataset.d;all();$('#panel').scrollIntoView({behavior:'smooth',block:'nearest'})}
+  else{const v=+b.dataset.nav;if(v===0){flush();sel=today;M={y:+today.slice(0,4),m:+today.slice(5,7)-1}}else{M.m+=v;if(M.m<0){M.m=11;M.y--}if(M.m>11){M.m=0;M.y++}}all()}
+});
+$('#panel').addEventListener('input',e=>{const t=e.target,i=t.closest('.xr')?.dataset.i;if(i===undefined||!t.dataset.k)return;
+  cur().ex[i][t.dataset.k]=['s','r','w'].includes(t.dataset.k)&&t.value!==''?+t.value:t.value;touch()});
+$('#panel').addEventListener('change',e=>{const t=e.target;if(t.dataset.k!=='n')return;const x=t.closest('.xr');x.querySelector('.lh').textContent=last(t.value,sel)});
+$('#panel').addEventListener('click',e=>{
+  const b=e.target.closest('[data-a]');if(!b)return;const a=b.dataset.a;
+  if(a==='add'){cur().ex.push({n:'',s:'',r:'',w:'',note:''});panel();[...document.querySelectorAll('#panel [data-k=n]')].pop().focus()}
+  else if(a==='rm'){cur().ex.splice(+b.closest('.xr').dataset.i,1);touch();all()}
+  else if(a==='copy'){const p=Object.keys(D).filter(x=>x<sel&&has(x)).sort().pop();cur().ex=real(D[p]).map(x=>({...x,note:''}));touch();all()}
+});
+$('#out').onclick=()=>Auth.out();
+const{data,error}=await sb.from('seances').select('id,data');
+if(error){setSt(/relation|does not exist|schema cache/i.test(error.message)?'⚠ La table « seances » n’existe pas encore : lance supabase_seances.sql dans Supabase.':'⚠ Chargement impossible : '+error.message,true);return}
+data.forEach(r=>{const k=r.data.date||r.id.slice(2);D[k]={date:k,ex:r.data.ex||[]}});setSt('Enregistré sur ton compte');all();
+})();
+</script>
+</body>
+</html>
