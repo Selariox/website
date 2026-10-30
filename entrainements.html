@@ -26,6 +26,13 @@
 .x2 label{display:block;font:600 .75rem 'Instrument Sans',sans-serif;color:var(--mute)}
 .x2 input{width:100%;margin-top:3px}
 .xr>input{width:100%}
+.cr{padding:9px 6px;border-bottom:1px solid var(--line);cursor:pointer;border-radius:8px;transition:background .15s}
+.cr:hover{background:color-mix(in srgb,var(--acc) 7%,var(--card))}
+.cr .l{display:flex;justify-content:space-between;gap:12px;align-items:baseline}.cr b{font-weight:600}
+.cr .l span{color:var(--mute);font:.88rem 'Instrument Sans',sans-serif;white-space:nowrap}
+.cr small{display:block;color:var(--mute);font:.8rem 'Instrument Sans',sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.vb{margin-top:10px;display:flex;justify-content:flex-end}
+.add{margin-top:14px}
 .empty{color:var(--mute);text-align:center;padding:18px 0}
 </style>
 </head>
@@ -52,7 +59,7 @@ const MOIS=['janvier','février','mars','avril','mai','juin','juillet','août','
 const DEFX=['Squat','Développé couché','Soulevé de terre','Tractions','Rowing','Développé militaire','Fentes','Gainage'];
 const fmtD=(k,o)=>new Date(k+'T00:00').toLocaleDateString('fr-FR',o);
 const nf=n=>Math.round(n).toLocaleString('fr-FR');
-let D={},sel=today,M={y:+today.slice(0,4),m:+today.slice(5,7)-1},pend=0,chain=Promise.resolve(),tT=0;
+let D={},OPENX=new Set(),sel=today,M={y:+today.slice(0,4),m:+today.slice(5,7)-1},pend=0,chain=Promise.resolve(),tT=0;
 const setSt=(m,bad)=>{$('#st').textContent=m;$('#st').style.color=bad?'#b3261e':''};
 const run=fn=>{pend++;chain=chain.then(fn).then(r=>{if(r&&r.error)throw r.error;if(!--pend)setSt('Enregistré sur ton compte')}).catch(e=>{pend=Math.max(0,pend-1);setSt('⚠ Non enregistré : '+(e.message||e),true)})};
 const real=d=>d?d.ex.filter(e=>e.n||e.s||e.r||e.w||e.note):[];
@@ -74,39 +81,45 @@ function last(n,date){
 function cal(){
   const{y,m}=M,off=(new Date(y,m,1).getDay()+6)%7,n=new Date(y,m+1,0).getDate();
   const ks=Array.from({length:n},(_,i)=>iso(y,m,i+1)),mk=ks.filter(has);
-  const sets=mk.reduce((t,k)=>t+real(D[k]).reduce((a,e)=>a+(+e.s||0),0),0),v=mk.reduce((t,k)=>t+real(D[k]).reduce((a,e)=>a+vol(e),0),0),st=streak();
+  const reps=mk.reduce((t,k)=>t+real(D[k]).reduce((a,e)=>a+(+e.s||0)*(+e.r||0),0),0),sets=mk.reduce((t,k)=>t+real(D[k]).reduce((a,e)=>a+(+e.s||0),0),0),v=mk.reduce((t,k)=>t+real(D[k]).reduce((a,e)=>a+vol(e),0),0),st=streak();
   const c=(x,l)=>`<div class="stat"><span class="v">${x}</span><small>${l}</small></div>`;
-  $('#stats').innerHTML=c(mk.length,'séances ce mois')+c(nf(sets),'séries ce mois')+c(nf(v)+' kg','volume ce mois')+c(st?'🔥 '+st:'–',st>1?'jours d’affilée':'jour d’affilée');
+  $('#stats').innerHTML=c(mk.length,'séances ce mois')+c(nf(sets),'séries ce mois')+c(nf(reps),'répétitions ce mois')+c(nf(v)+' kg','volume ce mois')+c(st?'🔥 '+st:'–',st>1?'jours d’affilée':'jour d’affilée');
   $('#cal').innerHTML=`<div class="nv"><button data-nav="-1" aria-label="Mois précédent">‹</button><h2>${MOIS[m]} ${y}</h2><button data-nav="1" aria-label="Mois suivant">›</button></div>
   <div class="gr">${'LMMJVSD'.split('').map(x=>`<span class="wd">${x}</span>`).join('')}${'<span class="dc e"></span>'.repeat(off)}${ks.map((k,i)=>{const c=real(D[k]).length;return `<button class="dc${k===today?' td':''}" data-d="${k}" aria-pressed="${k===sel}" style="--p:${Math.min(c,6)/6*45}%">${i+1}${c?`<i>${'●'.repeat(Math.min(c,4))}</i>`:''}</button>`}).join('')}</div>
   <p style="text-align:center;margin:12px 0 0"><button class="lnk" data-nav="0">Revenir à aujourd’hui</button></p>`;
 }
+const sm=e=>[(e.s&&e.r)?`${e.s} × ${e.r}`:e.s?`${e.s} série${e.s>1?'s':''}`:e.r?`${e.r} rép.`:'',e.w?`${e.w} kg`:''].filter(Boolean).join(' · ')||'—';
 function panel(){
   const d=D[sel]||{date:sel,ex:[]},t=fmtD(sel,{weekday:'long',day:'numeric',month:'long',year:'numeric'}),r=real(d);
   const prev=Object.keys(D).filter(x=>x<sel&&has(x)).sort().pop();
   $('#dx').innerHTML=[...new Set([...DEFX,...Object.values(D).flatMap(x=>x.ex.map(e=>e.n)).filter(Boolean)])].map(v=>`<option value="${esc(v)}">`).join('');
-  $('#panel').innerHTML=`<h2>${t[0].toUpperCase()+t.slice(1)}</h2><p>${r.length?`${r.length} exercice${r.length>1?'s':''} · ${nf(r.reduce((a,e)=>a+(+e.s||0),0))} séries · ${nf(r.reduce((a,e)=>a+vol(e),0))} kg soulevés`:'Aucun exercice enregistré ce jour.'}</p>
-  ${d.ex.map((e,i)=>`<div class="xr" data-i="${i}" style="--d:${Math.min(i,8)*40}ms"><div class="x1"><input type="text" data-k="n" list="dx" placeholder="Exercice (ex. Squat)" value="${esc(e.n)}" maxlength="80"><button class="lnk" data-a="rm" aria-label="Supprimer l’exercice">✕</button></div><small class="lh">${esc(last(e.n,sel))}</small>
+  const blk=(e,i)=>`<div class="xr" data-i="${i}"><div class="x1"><input type="text" data-k="n" list="dx" placeholder="Exercice (ex. Squat)" value="${esc(e.n)}" maxlength="80"><button class="lnk" data-a="rm" aria-label="Supprimer l’exercice">✕</button></div><small class="lh">${esc(last(e.n,sel))}</small>
   <div class="x2"><label>Séries<input type="number" data-k="s" min="0" inputmode="numeric" value="${esc(e.s)}"></label><label>Répétitions<input type="number" data-k="r" min="0" inputmode="numeric" value="${esc(e.r)}"></label><label>Poids (kg)<input type="number" data-k="w" min="0" step="0.5" inputmode="decimal" value="${esc(e.w)}"></label></div>
-  <input type="text" data-k="note" placeholder="Note : ressenti, temps de pause, remarque…" value="${esc(e.note)}"></div>`).join('')}
-  <button class="btn p" data-a="add">+ Ajouter un exercice</button>${!r.length&&prev?` <button class="btn" data-a="copy">Reprendre la séance du ${fmtD(prev,{day:'numeric',month:'short'})}</button>`:''}`;
+  <input type="text" data-k="note" placeholder="Note : ressenti, temps de pause, remarque…" value="${esc(e.note)}"><div class="vb"><button class="btn p" data-a="ok">✓ Valider</button></div></div>`;
+  const row=(e,i)=>`<div class="cr" data-i="${i}" data-a="ed" title="Cliquer pour modifier"><div class="l"><b>${esc(e.n||'Sans nom')}</b><span>${esc(sm(e))}</span></div>${e.note?`<small>${esc(e.note)}</small>`:''}</div>`;
+  $('#panel').innerHTML=`<h2>${t[0].toUpperCase()+t.slice(1)}</h2><p>${r.length?`${r.length} exercice${r.length>1?'s':''} · ${nf(r.reduce((a,e)=>a+(+e.s||0),0))} séries · ${nf(r.reduce((a,e)=>a+(+e.s||0)*(+e.r||0),0))} répétitions · ${nf(r.reduce((a,e)=>a+vol(e),0))} kg`:'Aucun exercice enregistré ce jour.'}</p>
+  ${d.ex.map((e,i)=>OPENX.has(e)?blk(e,i):row(e,i)).join('')}
+  <div class="add"><button class="btn p" data-a="add">+ Ajouter un exercice</button>${!r.length&&prev?` <button class="btn" data-a="copy">Reprendre la séance du ${fmtD(prev,{day:'numeric',month:'short'})}</button>`:''}</div>`;
 }
 const all=()=>{cal();panel()};
 const cur=()=>D[sel]||(D[sel]={date:sel,ex:[]});
 $('#cal').addEventListener('click',e=>{
   const b=e.target.closest('[data-d],[data-nav]');if(!b)return;
-  if(b.dataset.d){flush();sel=b.dataset.d;all();$('#panel').scrollIntoView({behavior:'smooth',block:'nearest'})}
-  else{const v=+b.dataset.nav;if(v===0){flush();sel=today;M={y:+today.slice(0,4),m:+today.slice(5,7)-1}}else{M.m+=v;if(M.m<0){M.m=11;M.y--}if(M.m>11){M.m=0;M.y++}}all()}
+  if(b.dataset.d){flush();OPENX.clear();sel=b.dataset.d;all();$('#panel').scrollIntoView({behavior:'smooth',block:'nearest'})}
+  else{const v=+b.dataset.nav;if(v===0){flush();OPENX.clear();sel=today;M={y:+today.slice(0,4),m:+today.slice(5,7)-1}}else{M.m+=v;if(M.m<0){M.m=11;M.y--}if(M.m>11){M.m=0;M.y++}}all()}
 });
 $('#panel').addEventListener('input',e=>{const t=e.target,i=t.closest('.xr')?.dataset.i;if(i===undefined||!t.dataset.k)return;
   cur().ex[i][t.dataset.k]=['s','r','w'].includes(t.dataset.k)&&t.value!==''?+t.value:t.value;touch()});
 $('#panel').addEventListener('change',e=>{const t=e.target;if(t.dataset.k!=='n')return;const x=t.closest('.xr');x.querySelector('.lh').textContent=last(t.value,sel)});
 $('#panel').addEventListener('click',e=>{
-  const b=e.target.closest('[data-a]');if(!b)return;const a=b.dataset.a;
-  if(a==='add'){cur().ex.push({n:'',s:'',r:'',w:'',note:''});panel();[...document.querySelectorAll('#panel [data-k=n]')].pop().focus()}
-  else if(a==='rm'){cur().ex.splice(+b.closest('.xr').dataset.i,1);touch();all()}
-  else if(a==='copy'){const p=Object.keys(D).filter(x=>x<sel&&has(x)).sort().pop();cur().ex=real(D[p]).map(x=>({...x,note:''}));touch();all()}
+  const b=e.target.closest('[data-a]');if(!b)return;const a=b.dataset.a,row=b.closest('.xr,.cr'),i=row?+row.dataset.i:-1;
+  if(a==='add'){const x={n:'',s:'',r:'',w:'',note:''};cur().ex.push(x);OPENX.add(x);panel();[...document.querySelectorAll('#panel [data-k=n]')].pop().focus()}
+  else if(a==='ed'){OPENX.add(cur().ex[i]);panel();document.querySelector(`#panel .xr[data-i="${i}"] [data-k=n]`).focus()}
+  else if(a==='ok'){const x=cur().ex[i];OPENX.delete(x);if(!real({ex:[x]}).length){cur().ex.splice(i,1);touch()}all()}
+  else if(a==='rm'){OPENX.delete(cur().ex[i]);cur().ex.splice(i,1);touch();all()}
+  else if(a==='copy'){const p=Object.keys(D).filter(x=>x<sel&&has(x)).sort().pop();OPENX.clear();cur().ex=real(D[p]).map(x=>({...x,note:''}));touch();all()}
 });
+$('#panel').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.tagName==='INPUT'&&e.target.closest('.xr')){e.preventDefault();e.target.closest('.xr').querySelector('[data-a=ok]').click()}});
 $('#out').onclick=()=>Auth.out();
 const{data,error}=await sb.from('seances').select('id,data');
 if(error){setSt(/relation|does not exist|schema cache/i.test(error.message)?'⚠ La table « seances » n’existe pas encore : lance supabase_seances.sql dans Supabase.':'⚠ Chargement impossible : '+error.message,true);return}
